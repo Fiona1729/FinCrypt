@@ -62,8 +62,8 @@ def H(l,C):
 # From here on we're setting up command-line args and
 # Calling encryption and decryption functions
 parser = argparse.ArgumentParser(description='Encrypt and decrypt using a SECRET cipher')
-parser.add_argument('--encrypt', '-e', action='store_true', help='Use this flag to encrypt instead of decrypt')
-parser.add_argument('--blocksize', '-b', nargs=1, type=int, required=False, default=1<<7, help='Don\'t mess with this')
+parser.add_argument('--encrypt', '-E', action='store_true', help='Use this flag to encrypt instead of decrypt')
+parser.add_argument('--blocksize', '-B', nargs=1, type=int, required=False, default=1<<7, help='Don\'t mess with this')
 parser.add_argument('keyfile', type=argparse.FileType('r'), default=None, help='File for key. Usually named public key for encryption and private key for decryption')
 parser.add_argument('infile', nargs='?', type=argparse.FileType('r'), default=sys.stdin, help='Input file to read from and encrypt/decrypt. Defaults to stdin')
 args = vars(parser.parse_args())
