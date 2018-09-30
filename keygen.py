@@ -61,7 +61,7 @@ def aJ(ks):
 def an(pbm,pvm,ks):
  aQ,ao=aJ(ks)
  aC.write('N Digits: %s, D Digits: %s\n'%(aY(aH(aQ[0])),aY(aH(aQ[1]))))
- aC.write('Priv file: %s\n'%(pbm))
+ aC.write('Pub file: %s\n'%(pbm))
  fo=aw(pbm,'w')
  fo.write('%s,%s,%s'%(ks,aQ[0],aQ[1]))
  fo.close()
