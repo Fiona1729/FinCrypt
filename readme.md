@@ -8,3 +8,12 @@ To decrypt the message.
 
 ```python crypto -h```  
 To view help
+
+```python keygen.py -h```  
+To view help
+
+```python keygen.py pubkey2.txt privkey2.txt```  
+To generate 2048 bit keys
+
+```python keygen.py -K 4096 pubkey3.txt privkey3.txt```  
+To generate 4096 bit keys.
