@@ -60,11 +60,11 @@ def encrypt_message(n, e, message, key_size):
 
     block_size = key_size // 8
 
-    message_encrypter = Encrypter(mode=AESModeOfOperationCBC(key=key, iv=iv))
+    message_encryptor = Encrypter(mode=AESModeOfOperationCBC(key=key, iv=iv))
 
-    encrypted_blocks = message_encrypter.feed(message)
+    encrypted_blocks = message_encryptor.feed(message)
 
-    encrypted_blocks += message_encrypter.feed()
+    encrypted_blocks += message_encryptor.feed()
 
     for block in get_blocks(key, block_size):
         encrypted_key.append(encrypt_number(n, e, block))
