@@ -238,11 +238,15 @@ def encrypt_stream(arguments):
 
 def decrypt_stream(arguments):
     message, verified = decrypt_and_verify(''.join(arguments.infile.read().split('\n')), arguments.sender)
-    sys.stdout.buffer.write(zlib.decompress(message))
     if message is None:
-        sys.stderr.write('Decryption failed.')
+        sys.stderr.write('Decryption failed.\n')
+    else:
+        try:
+            sys.stdout.buffer.write(zlib.decompress(message))
+        except:
+            sys.stderr.write('Decompression failed.\n')
     if not verified:
-        sys.stderr.write('Verification failed. Message is not intact.')
+        sys.stderr.write('Verification failed. Message is not intact.\n')
 
 
 def enum_keys(arguments):
