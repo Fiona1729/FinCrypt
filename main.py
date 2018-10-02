@@ -1,6 +1,14 @@
 #!/usr/bin/env python3
 
-import string, resin, sys, os, argparse, base64, zlib, randomart
+import resin
+import sys
+import os
+import argparse
+import base64
+import zlib
+import randomart
+import string
+from block import Decrypter, Encrypter, AESModeOfOperationCBC
 
 BASE_PATH = os.path.dirname(__file__)
 BASE64_LITERALS = string.ascii_uppercase + string.ascii_lowercase + string.digits + '+='
@@ -9,7 +17,6 @@ PRIVATE_KEY = os.path.join(BASE_PATH, 'private_key', 'private.asc')
 
 
 def get_blocks(message, block_size=256):
-    message = zlib.compress(message)
     block_nums = []
     for block in [message[i:i + block_size] for i in range(0, len(message), block_size)]:
         block_num = 0
@@ -30,9 +37,7 @@ def get_text(block_nums):
             block_text.append(bytes([message_num]))
         block_text.reverse()
         message.extend(block_text)
-    message = b''.join(message)
-    message = zlib.decompress(message)
-    return message
+    return b''.join(message)
 
 
 def encrypt_number(n, e, num):
@@ -44,18 +49,74 @@ def decrypt_number(n, d, num):
 
 
 def encrypt_message(n, e, message, key_size):
-    encrypted_blocks = []
-    encoded_blocks = []
+    encrypted_key = []
+    encoded_key = []
+    encrypted_iv = []
+    encoded_iv = []
+    encoded_message = []
+
+    key = os.urandom(32)
+    iv = os.urandom(16)
 
     block_size = key_size // 8
 
-    for block in get_blocks(message, block_size):
-        encrypted_blocks.append(encrypt_number(n, e, block))
+    message_encrypter = Encrypter(mode=AESModeOfOperationCBC(key=key, iv=iv))
 
-    for block in encrypted_blocks:
-        encoded_blocks.append(int_to_base64(block))
+    encrypted_blocks = message_encrypter.feed(message)
 
-    return ','.join(encoded_blocks)
+    encrypted_blocks += message_encrypter.feed()
+
+    for block in get_blocks(key, block_size):
+        encrypted_key.append(encrypt_number(n, e, block))
+    for block in encrypted_key:
+        encoded_key.append(int_to_base64(block))
+
+    for block in get_blocks(iv, block_size):
+        encrypted_iv.append(encrypt_number(n, e, block))
+    for block in encrypted_iv:
+        encoded_iv.append(int_to_base64(block))
+
+    for block in get_blocks(encrypted_blocks, block_size):
+        encoded_message.append(int_to_base64(block))
+
+    final_key = ','.join(encoded_key)
+    final_iv = ','.join(encoded_iv)
+    final_message = ','.join(encoded_message)
+
+    return '_'.join([final_key, final_iv, final_message])
+
+
+def decrypt_message(n, d, full_message):
+    encoded_key, encoded_iv, encoded_message = full_message.split('_')
+    encrypted_key = []
+    decrypted_key = []
+    encrypted_iv = []
+    decrypted_iv = []
+    encrypted_message = []
+    decrypted_message = []
+
+    for block in encoded_key.split(','):
+        encrypted_key.append(int_from_base64(block))
+    for block in encrypted_key:
+        decrypted_key.append(decrypt_number(n, d, block))
+    decrypted_key = get_text(decrypted_key)
+
+    for block in encoded_iv.split(','):
+        encrypted_iv.append(int_from_base64(block))
+    for block in encrypted_iv:
+        decrypted_iv.append(decrypt_number(n, d, block))
+    decrypted_iv = get_text(decrypted_iv)
+
+    message_decryptor = Decrypter(mode=AESModeOfOperationCBC(decrypted_key, iv=decrypted_iv))
+
+    for block in encoded_message.split(','):
+        encrypted_message.append(int_from_base64(block))
+    decoded_message = get_text(encrypted_message)
+
+    decrypted_message = message_decryptor.feed(decoded_message)
+    decrypted_message += message_decryptor.feed()
+
+    return decrypted_message
 
 
 def sign_message(n, e, message, key_size):
@@ -73,19 +134,6 @@ def sign_message(n, e, message, key_size):
         encoded_blocks.append(int_to_base64(block))
 
     return ','.join(encoded_blocks)
-
-
-def decrypt_message(n, d, encrypted_message):
-    decoded_blocks = []
-    decrypted_blocks = []
-
-    for block in encrypted_message.split(','):
-        decoded_blocks.append(int_from_base64(block))
-
-    for block in decoded_blocks:
-        decrypted_blocks.append(decrypt_number(n, d, block))
-
-    return get_text(decrypted_blocks)
 
 
 def authenticate_message(n, d, plaintext, encrypted_hash):
@@ -126,11 +174,17 @@ def decode_b64_string(string):
 def read_key(key_text):
     key_parts = ''.join(key_text.split('\n')).split(',')
     key_size = int_from_base64(key_parts[0])
+
     message_n = int_from_base64(key_parts[1])
+
     message_exp = int_from_base64(key_parts[2])
+
     signature_n = int_from_base64(key_parts[3])
+
     signature_exp = int_from_base64(key_parts[4])
+
     name = decode_b64_string(key_parts[5])
+
     email = decode_b64_string(key_parts[6])
     return {'key_size': key_size, 'n': message_n, 'exp': message_exp, 'sig_n': signature_n, 'sig_exp': signature_exp,
             'name': name, 'email': email}
@@ -152,11 +206,11 @@ def encrypt_and_sign(message, recipient):
     encrypted_message = encrypt_message(recipient_key['n'], recipient_key['exp'], message, recipient_key['key_size'])
     signature = sign_message(signer_key['sig_n'], signer_key['sig_exp'], message, signer_key['key_size'])
 
-    return '_'.join([encrypted_message, signature])
+    return '|'.join([encrypted_message, signature])
 
 
 def decrypt_and_verify(message, sender):
-    encrypted_message, signature = message.split('_')
+    encrypted_message, signature = message.split('|')
     sender_key = os.path.join(PUBLIC_PATH, sender)
 
     if not os.path.exists(sender_key):
@@ -176,13 +230,13 @@ def decrypt_and_verify(message, sender):
 
 
 def encrypt_stream(args):
-    message = encrypt_and_sign(args.infile.read(), args.recipient)
+    message = encrypt_and_sign(zlib.compress(args.infile.read()), args.recipient)
     sys.stdout.write('\n'.join([message[i:i + 76] for i in range(0, len(message), 76)]))
 
 
 def decrypt_stream(args):
     message, verified = decrypt_and_verify(''.join(args.infile.read().split('\n')), args.sender)
-    sys.stdout.buffer.write(message)
+    sys.stdout.buffer.write(zlib.decompress(message))
     if not verified:
         sys.stderr.write('Verification failed.')
 
@@ -196,7 +250,8 @@ def enum_keys(args):
         hash = resin.SHA256(key_text.encode('utf-8')).hexdigest()
         hash_formatted = ':'.join([hash[i:i + 2] for i in range(0, len(hash), 2)]).upper()
         key_randomart = randomart.randomart(hash, 'SHA256')
-        format = f"{key['name']}:\nEmail: {key['email']}\nHash: {hash_formatted}\nKeyArt:\n{key_randomart}"
+        format = f"{key_file}:\nName: {key['name']}:\nEmail: {key['email']}\nHash: " \
+                 f"{hash_formatted}\nKeyArt:\n{key_randomart}"
         key_enum += format + '\n\n'
     sys.stdout.write(key_enum.strip())
 
@@ -212,22 +267,34 @@ def test():
     sys.stdout.write('Done running tests!')
 
 
-parser = argparse.ArgumentParser(description='Encrypt and decrypt using Fin\'s cipher. Place your private key as ./private_key/private.asc ')
+parser = argparse.ArgumentParser(
+    description='Encrypt and decrypt using FinCrypt. Place your private key as '
+                './private_key/private.asc, and distribute your public key.')
 parser.add_argument('--enumerate_keys', '-N', action='store_const', dest='func', const=enum_keys)
-
 subparsers = parser.add_subparsers(title='sub-commands', description='Encryption and decryption sub-commands')
 
 parser_encrypt = subparsers.add_parser('encrypt', aliases=['e'], help='Encrypt a message.')
-parser_encrypt.add_argument('recipient', type=str, default=None, help='The filename of the recipient\'s public key. Always defaults to the /public_keys directory.')
-parser_encrypt.add_argument('infile', nargs='?', type=argparse.FileType('rb'), default=sys.stdin.buffer, help='File to encrypt. Defaults to stdin.')
+parser_encrypt.add_argument('recipient', type=str, default=None,
+                            help='The filename of the recipient\'s public key. '
+                                 'Always defaults to the /public_keys directory.')
+parser_encrypt.add_argument('infile', nargs='?', type=argparse.FileType('rb'), default=sys.stdin.buffer,
+                            help='File to encrypt. Defaults to stdin.')
 parser_encrypt.set_defaults(func=encrypt_stream)
 
-
 parser_decrypt = subparsers.add_parser('decrypt', aliases=['d'], help='Decrypt a message.')
-parser_decrypt.add_argument('sender', type=str, default=None, help='The filename of the sender\'s public key. Always defaults to the /public_keys directory.')
-parser_decrypt.add_argument('infile', nargs='?', type=argparse.FileType('r'), default=sys.stdin, help='The filename or path of the encrypted file. Defaults to stdin.')
+parser_decrypt.add_argument('sender', type=str, default=None,
+                            help='The filename of the sender\'s public key. '
+                                 'Always defaults to the /public_keys directory.')
+parser_decrypt.add_argument('infile', nargs='?', type=argparse.FileType('r'), default=sys.stdin,
+                            help='The filename or path of the encrypted file. Defaults to stdin.')
 parser_decrypt.set_defaults(func=decrypt_stream)
 
-
 args = parser.parse_args()
+
+try:
+    args.func
+except NameError:
+    sys.stderr.write('FinCrypt requires arguments!')
+    sys.exit()
+
 args.func(args)

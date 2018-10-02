@@ -1,4 +1,4 @@
-import random, sys, os, string, base64, resin
+import random, sys, os, string, base64, argparse
 
 
 BASE64_LITERALS = string.ascii_uppercase + string.ascii_lowercase + string.digits + '+='
@@ -184,6 +184,9 @@ def gen_key_files(pub_name, priv_name, key_size, *, name, email):
     with open(priv_name, 'w') as f:
         f.write('\n'.join([private[i:i + 76] for i in range(0, len(private), 76)]))
 
+
+parser = argparse.ArgumentParser(description='Generate keyfiles for FinCrypt.')
+parser.add_argument('email', type=str, default=None, help='')
 
 
 gen_key_files('public.asc', 'private.asc', 4096, name='Jane Doe', email='person2@example.com')
