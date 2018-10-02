@@ -1,4 +1,7 @@
-import random, sys, os
+import random, sys, os, string, base64, resin
+
+
+BASE64_LITERALS = string.ascii_uppercase + string.ascii_lowercase + string.digits + '+='
 
 
 def gcd(a, b):
@@ -93,8 +96,22 @@ def gen_prime(prime_size=4096):
         if prime(num):
             return num
 
-def main():
-    gen_key_files('main', 4096)
+def to_base64(x):
+    digits = []
+    while x:
+        digits.append(BASE64_LITERALS[x % 64])
+        x //= 64
+    digits.reverse()
+    return ''.join(digits)
+
+
+def from_base64(base64):
+    block_num = 0
+    base64 = base64[::-1]
+    for i, char in enumerate(base64):
+        block_num += BASE64_LITERALS.find(char) * (64 ** i)
+    return block_num
+
 
 def gen_key(key_size):
     """
@@ -105,19 +122,23 @@ def gen_key(key_size):
 
 
     # Generate N, our modulus.
+    print('Generating P prime')
     p = gen_prime(key_size)
+    print('Generating Q prime')
     q = gen_prime(key_size)
     n = p * q
 
     # Find a number that is coprime with PHI(n)
     # PHI(n) == (p - 1) * (q - 1)
     # This is encryption exponent
+    print('Finding E')
     while True:
         e = random.randrange(2 ** (key_size - 1), 2 ** (key_size))
         if gcd(e, (p - 1) * (q - 1)) == 1:
             break
 
     # Find the decryption exponent, which is the mod inverse of e and PHI(n)
+    print('Finding D')
     d = modinv(e, (p - 1) * (q - 1))
 
     encryption_key = (n, e)
@@ -125,27 +146,44 @@ def gen_key(key_size):
 
     return (encryption_key, decryption_key)
 
+def encode_string(string):
+    return base64.b64encode(string.encode('utf-8')).decode('utf-8')
 
-def gen_key_files(name, key_size):
+
+def gen_key_files(pub_name, priv_name, key_size, *, name, email):
     """
     Generates key files. Public keys contain an encryption key for messages and
     a decryption key for signatures. Private keys contain a decryption key for messages
     and an encryption key for signatures.
-    :param name:
-    :param key_size:
-    :return:
+
+    :param pub_name: Public key filename
+    :param priv_name: Private key filename
+    :param key_size: Keysize in bits
+    :param name: User's name
+    :param email: User's email
+    :return: None
     """
 
     if os.path.exists(pub_name) or os.path.exists(priv_name):
-        sys.stdout.write('Key files already exist!')
+        print('Key files already exist!')
         sys.exit()
 
     message_pub, message_priv = gen_key(key_size)
 
     signature_priv, signature_pub = gen_key(key_size)
 
+    public = '%s,%s,%s,%s,%s,%s,%s' % (to_base64(key_size), to_base64(message_pub[0]), to_base64(message_pub[1]),
+                                       to_base64(signature_pub[0]), to_base64(signature_pub[1]), encode_string(name), encode_string(email))
+
+    private = '%s,%s,%s,%s,%s,%s,%s' % (to_base64(key_size), to_base64(message_priv[0]), to_base64(message_priv[1]),
+                                        to_base64(signature_priv[0]), to_base64(signature_priv[1]), encode_string(name), encode_string(email))
+
     with open(pub_name, 'w') as f:
-        f.write('%s,%s,%s,%s,%s' % (key_size, message_pub[0], message_pub[1], signature_pub[0], signature_pub[1]))
+        f.write('\n'.join([public[i:i + 76] for i in range(0, len(public), 76)]))
 
     with open(priv_name, 'w') as f:
-        f.write('%s,%s,%s,%s,%s' % (key_size, message_priv[0], message_priv[1], signature_priv[0], signature_priv[1]))
+        f.write('\n'.join([private[i:i + 76] for i in range(0, len(private), 76)]))
+
+
+
+gen_key_files('public.asc', 'private.asc', 4096, name='Jane Doe', email='person2@example.com')
