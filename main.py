@@ -93,7 +93,6 @@ def decrypt_message(n, d, full_message):
     encrypted_iv = []
     decrypted_iv = []
     encrypted_message = []
-    decrypted_message = []
 
     for block in encoded_key.split(','):
         encrypted_key.append(int_from_base64(block))
@@ -159,16 +158,16 @@ def int_to_base64(x):
     return ''.join(digits)
 
 
-def int_from_base64(base64):
+def int_from_base64(b64):
     block_num = 0
-    base64 = base64[::-1]
-    for i, char in enumerate(base64):
+    b64 = b64[::-1]
+    for i, char in enumerate(b64):
         block_num += BASE64_LITERALS.find(char) * (64 ** i)
     return block_num
 
 
-def decode_b64_string(string):
-    return base64.b64decode(string.encode('utf-8')).decode('utf-8')
+def decode_b64_string(b64_string):
+    return base64.b64decode(b64_string.encode('utf-8')).decode('utf-8')
 
 
 def read_key(key_text):
@@ -229,30 +228,30 @@ def decrypt_and_verify(message, sender):
     return decrypted_message, authenticated
 
 
-def encrypt_stream(args):
-    message = encrypt_and_sign(zlib.compress(args.infile.read()), args.recipient)
+def encrypt_stream(arguments):
+    message = encrypt_and_sign(zlib.compress(arguments.infile.read()), arguments.recipient)
     sys.stdout.write('\n'.join([message[i:i + 76] for i in range(0, len(message), 76)]))
 
 
-def decrypt_stream(args):
-    message, verified = decrypt_and_verify(''.join(args.infile.read().split('\n')), args.sender)
+def decrypt_stream(arguments):
+    message, verified = decrypt_and_verify(''.join(arguments.infile.read().split('\n')), arguments.sender)
     sys.stdout.buffer.write(zlib.decompress(message))
     if not verified:
         sys.stderr.write('Verification failed.')
 
 
-def enum_keys(args):
+def enum_keys(arguments):
     key_enum = ''
     for key_file in os.listdir(PUBLIC_PATH):
         with open(os.path.join(PUBLIC_PATH, key_file)) as f:
             key_text = f.read()
         key = read_key(key_text)
-        hash = resin.SHA256(key_text.encode('utf-8')).hexdigest()
-        hash_formatted = ':'.join([hash[i:i + 2] for i in range(0, len(hash), 2)]).upper()
-        key_randomart = randomart.randomart(hash, 'SHA256')
-        format = f"{key_file}:\nName: {key['name']}:\nEmail: {key['email']}\nHash: " \
-                 f"{hash_formatted}\nKeyArt:\n{key_randomart}"
-        key_enum += format + '\n\n'
+        key_hash = resin.SHA256(key_text.encode('utf-8')).hexdigest()
+        key_hash_formatted = ':'.join([key_hash[i:i + 2] for i in range(0, len(key_hash), 2)]).upper()
+        key_randomart = randomart.randomart(key_hash, 'SHA256')
+        formatted_key = f"{key_file}:\nName: {key['name']}:\nEmail: {key['email']}\nHash: " \
+                        f"{key_hash_formatted}\nKeyArt:\n{key_randomart}"
+        key_enum += formatted_key + '\n\n'
     sys.stdout.write(key_enum.strip())
 
 
@@ -291,10 +290,9 @@ parser_decrypt.set_defaults(func=decrypt_stream)
 
 args = parser.parse_args()
 
-try:
-    args.func
-except NameError:
-    sys.stderr.write('FinCrypt requires arguments!')
+
+if args.func is None:
+    parser.print_help()
     sys.exit()
 
 args.func(args)
