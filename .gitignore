@@ -105,5 +105,3 @@ venv.bak/
 .idea/
 python-*
 *.zip
-challenge*
-base*
