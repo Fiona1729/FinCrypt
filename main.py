@@ -203,7 +203,7 @@ def encrypt_and_sign(message, recipient):
         signer_key = read_key(f.read())
 
     encrypted_message = encrypt_message(recipient_key['n'], recipient_key['exp'], message, recipient_key['key_size'])
-    signature = sign_message(signer_key['sig_n'], signer_key['sig_exp'], message, signer_key['key_size'])
+    signature = sign_message(signer_key['sig_n'], signer_key['sig_exp'], encrypted_message.encode('utf-8'), signer_key['key_size'])
 
     return '|'.join([encrypted_message, signature])
 
@@ -222,8 +222,11 @@ def decrypt_and_verify(message, sender):
     with open(sender_key) as f:
         sender_key = read_key(f.read())
 
-    decrypted_message = decrypt_message(decryption_key['n'], decryption_key['exp'], encrypted_message)
-    authenticated = authenticate_message(sender_key['sig_n'], sender_key['sig_exp'], decrypted_message, signature)
+    try:
+        decrypted_message = decrypt_message(decryption_key['n'], decryption_key['exp'], encrypted_message)
+    except:
+        decrypted_message = None
+    authenticated = authenticate_message(sender_key['sig_n'], sender_key['sig_exp'], encrypted_message.encode('utf-8'), signature)
 
     return decrypted_message, authenticated
 
@@ -236,8 +239,10 @@ def encrypt_stream(arguments):
 def decrypt_stream(arguments):
     message, verified = decrypt_and_verify(''.join(arguments.infile.read().split('\n')), arguments.sender)
     sys.stdout.buffer.write(zlib.decompress(message))
+    if message is None:
+        sys.stderr.write('Decryption failed.')
     if not verified:
-        sys.stderr.write('Verification failed.')
+        sys.stderr.write('Verification failed. Message is not intact.')
 
 
 def enum_keys(arguments):
@@ -253,17 +258,6 @@ def enum_keys(arguments):
                         f"{key_hash_formatted}\nKeyArt:\n{key_randomart}"
         key_enum += formatted_key + '\n\n'
     sys.stdout.write(key_enum.strip())
-
-
-def test():
-    texts = [b'Hello, World!', b'ET Come Home', b'\x02\x03\x04\x05']
-    for text in texts:
-        message = encrypt_and_sign(text, 'public.asc')
-        decrypted, verified = decrypt_and_verify(message, 'public.asc')
-        assert decrypted == text
-        assert verified
-
-    sys.stdout.write('Done running tests!')
 
 
 parser = argparse.ArgumentParser(
