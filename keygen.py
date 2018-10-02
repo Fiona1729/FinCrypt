@@ -1,12 +1,12 @@
 import random, sys, os, string, base64, argparse
 
-
 BASE64_LITERALS = string.ascii_uppercase + string.ascii_lowercase + string.digits + '+='
 
 
 def gcd(a, b):
     """
     Calculates the GCD of two numbers using Euclid's algorithm.
+
     :param a: A
     :param b: B
     :return: GCD
@@ -19,13 +19,14 @@ def gcd(a, b):
 def modinv(a, m):
     """
     Calculates the modular inverse of a and m using Euclid's extended algorithm
+
     :param a: A
     :param m: M
     :return: Modular inverse if it exists, None otherwise.
     """
 
     if gcd(a, m) != 1:
-        return None # If a and m aren't coprime, there is no mod inverse
+        return None  # If a and m aren't coprime, there is no mod inverse
 
     u1, u2, u3 = 1, 0, a
     v1, v2, v3 = 0, 1, m
@@ -38,13 +39,14 @@ def modinv(a, m):
 def rabin_miller(p):
     """
     Fast Rabin Miller primality test.
+
     :param p: The number to test for primality
     :return: Whether the number is prime with a great degree of certainty
     """
 
-    if p < 2: # Less than two means number is prime
+    if p < 2:  # Less than two means number is prime
         return False
-    if p != 2 and p % 2 == 0: # Divisible by two means number is prime.
+    if p != 2 and p % 2 == 0:  # Divisible by two means number is prime.
         return False
     s = p - 1
     while s % 2 == 0:
@@ -65,6 +67,7 @@ def prime(p):
     """
     Returns whether a number is prime to a great degree of certainty.
     Performs smaller checks before calling rabin_miller
+
     :param p: Number to test
     :return: Whether p is prime
     """
@@ -72,7 +75,14 @@ def prime(p):
     if (p < 2):
         return False
 
-    primes = [2, 3, 5, 7, 11, 13, 17, 19, 23, 29, 31, 37, 41, 43, 47, 53, 59, 61, 67, 71, 73, 79, 83, 89, 97, 101, 103, 107, 109, 113, 127, 131, 137, 139, 149, 151, 157, 163, 167, 173, 179, 181, 191, 193, 197, 199, 211, 223, 227, 229, 233, 239, 241, 251, 257, 263, 269, 271, 277, 281, 283, 293, 307, 311, 313, 317, 331, 337, 347, 349, 353, 359, 367, 373, 379, 383, 389, 397, 401, 409, 419, 421, 431, 433, 439, 443, 449, 457, 461, 463, 467, 479, 487, 491, 499, 503, 509, 521, 523, 541, 547, 557, 563, 569, 571, 577, 587, 593, 599, 601, 607, 613, 617, 619, 631, 641, 643, 647, 653, 659, 661, 673, 677, 683, 691, 701, 709, 719, 727, 733, 739, 743, 751, 757, 761, 769, 773, 787, 797, 809, 811, 821, 823, 827, 829, 839, 853, 857, 859, 863, 877, 881, 883, 887, 907, 911, 919, 929, 937, 941, 947, 953, 967, 971, 977, 983, 991, 997]
+    primes = [2, 3, 5, 7, 11, 13, 17, 19, 23, 29, 31, 37, 41, 43, 47, 53, 59, 61, 67, 71, 73, 79, 83, 89, 97, 101, 103,
+              107, 109, 113, 127, 131, 137, 139, 149, 151, 157, 163, 167, 173, 179, 181, 191, 193, 197, 199, 211, 223,
+              227, 229, 233, 239, 241, 251, 257, 263, 269, 271, 277, 281, 283, 293, 307, 311, 313, 317, 331, 337, 347,
+              349, 353, 359, 367, 373, 379, 383, 389, 397, 401, 409, 419, 421, 431, 433, 439, 443, 449, 457, 461, 463,
+              467, 479, 487, 491, 499, 503, 509, 521, 523, 541, 547, 557, 563, 569, 571, 577, 587, 593, 599, 601, 607,
+              613, 617, 619, 631, 641, 643, 647, 653, 659, 661, 673, 677, 683, 691, 701, 709, 719, 727, 733, 739, 743,
+              751, 757, 761, 769, 773, 787, 797, 809, 811, 821, 823, 827, 829, 839, 853, 857, 859, 863, 877, 881, 883,
+              887, 907, 911, 919, 929, 937, 941, 947, 953, 967, 971, 977, 983, 991, 997]
 
     if p in primes:
         return True
@@ -87,6 +97,7 @@ def prime(p):
 def gen_prime(prime_size=4096):
     """
     Returns a random prime number of key_size bits
+
     :param prime_size: Prime number size
     :return: Number
     """
@@ -96,7 +107,15 @@ def gen_prime(prime_size=4096):
         if prime(num):
             return num
 
+
 def to_base64(x):
+    """
+    Converts an integer to base64 representation.
+
+    :param x: X
+    :return: Base64 encoded x
+    """
+
     digits = []
     while x:
         digits.append(BASE64_LITERALS[x % 64])
@@ -106,6 +125,13 @@ def to_base64(x):
 
 
 def from_base64(base64):
+    """
+    Decodes an integer from base64 back to integer form.
+
+    :param base64: Base64 encoded integer
+    :return: Integer
+    """
+
     block_num = 0
     base64 = base64[::-1]
     for i, char in enumerate(base64):
@@ -116,10 +142,10 @@ def from_base64(base64):
 def gen_key(key_size):
     """
     Generates an RSA encryption and decryption keypair.
+
     :param key_size: Key size in bits. RSA doesn't work when encrypting numbers with over key_size bits.
     :return: Tuple of tuples ((n, e), (n, d))
     """
-
 
     # Generate N, our modulus.
     print('Generating P prime')
@@ -144,10 +170,27 @@ def gen_key(key_size):
     encryption_key = (n, e)
     decryption_key = (n, d)
 
-    return (encryption_key, decryption_key)
+    return encryption_key, decryption_key
+
 
 def encode_string(string):
+    """
+    Encodes a string into base64
+
+    :param string: String
+    :return: Encoded string
+    """
     return base64.b64encode(string.encode('utf-8')).decode('utf-8')
+
+
+def num_length(num):
+    """
+    Returns the length in digits of num
+
+    :param num: Num
+    :return: Length in digits
+    """
+    return len(str(num))
 
 
 def gen_key_files(pub_name, priv_name, key_size, *, name, email):
@@ -173,19 +216,24 @@ def gen_key_files(pub_name, priv_name, key_size, *, name, email):
     print('Generating message signing keypair')
     signature_priv, signature_pub = gen_key(key_size)
 
+    print('The public key is 4 numbers with %s, %s, %s, and %s digits.' % (num_length(message_pub[0]),
+                                                                           num_length(message_pub[1]),
+                                                                           num_length(signature_pub[0]),
+                                                                           num_length(signature_pub[1])))
+
     public = '%s,%s,%s,%s,%s,%s,%s' % (to_base64(key_size), to_base64(message_pub[0]), to_base64(message_pub[1]),
-                                       to_base64(signature_pub[0]), to_base64(signature_pub[1]), encode_string(name), encode_string(email))
+                                       to_base64(signature_pub[0]), to_base64(signature_pub[1]),
+                                       encode_string(name), encode_string(email))
 
     private = '%s,%s,%s,%s,%s,%s,%s' % (to_base64(key_size), to_base64(message_priv[0]), to_base64(message_priv[1]),
-                                        to_base64(signature_priv[0]), to_base64(signature_priv[1]), encode_string(name), encode_string(email))
+                                        to_base64(signature_priv[0]), to_base64(signature_priv[1]),
+                                        encode_string(name), encode_string(email))
 
     with open(pub_name, 'w') as f:
         f.write('\n'.join([public[i:i + 76] for i in range(0, len(public), 76)]))
 
     with open(priv_name, 'w') as f:
         f.write('\n'.join([private[i:i + 76] for i in range(0, len(private), 76)]))
-
-
 
 
 if __name__ == '__main__':
@@ -198,7 +246,9 @@ if __name__ == '__main__':
     pub_file = input('Please enter the desired filename of the public key.\n'
                      'Try and make it descriptive so others can easily recognize it.\n>>>')
 
-    priv_file= input('Please enter the desired filename of the private key.\n'
-                     'Rename this key private.asc and put it into your private_key directory.\n>>>')
+    priv_file = input('Please enter the desired filename of the private key.\n'
+                      'Rename this key private.asc and put it into your private_key directory.\n>>>')
+
+    print('\nBeginning key generation\n\n')
 
     gen_key_files(pub_file, priv_file, 4096, name=name[:50], email=email[:80])
