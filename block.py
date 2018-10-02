@@ -897,7 +897,7 @@ class AESModeOfOperationCTR(AESStreamModeOfOperation):
          contributes to the encrypted value, so no data patterns are
          leaked.
        o Also known as: Counter Mode (CM), Integer Counter Mode (ICM) and
-         Segmented Integer Counter (SIC
+         Segmented Integer Counter (SIC)
 
    Security Notes:
        o This method (and CBC) ARE recommended.
