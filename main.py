@@ -1,14 +1,15 @@
 #!/usr/bin/env python3
 
-import string, resin, sys, os, argparse, base64
+import string, resin, sys, os, argparse, base64, zlib, randomart
 
 BASE_PATH = os.path.dirname(__file__)
-BASE64_LITERALS = bytes(string.ascii_uppercase + string.ascii_lowercase + string.digits + '+=', 'utf-8')
+BASE64_LITERALS = string.ascii_uppercase + string.ascii_lowercase + string.digits + '+='
 PUBLIC_PATH = os.path.join(BASE_PATH, 'public_keys')
 PRIVATE_KEY = os.path.join(BASE_PATH, 'private_key', 'private.asc')
 
 
-def get_blocks(message, block_size=8):
+def get_blocks(message, block_size=256):
+    message = zlib.compress(message)
     block_nums = []
     for block in [message[i:i + block_size] for i in range(0, len(message), block_size)]:
         block_num = 0
@@ -29,7 +30,9 @@ def get_text(block_nums):
             block_text.append(bytes([message_num]))
         block_text.reverse()
         message.extend(block_text)
-    return b''.join(message)
+    message = b''.join(message)
+    message = zlib.decompress(message)
+    return message
 
 
 def encrypt_number(n, e, num):
@@ -153,7 +156,7 @@ def encrypt_and_sign(message, recipient):
 
 
 def decrypt_and_verify(message, sender):
-    encrypted_message, signature = message.split(b'_')
+    encrypted_message, signature = message.split('_')
     sender_key = os.path.join(PUBLIC_PATH, sender)
 
     if not os.path.exists(sender_key):
@@ -174,12 +177,28 @@ def decrypt_and_verify(message, sender):
 
 def encrypt_stream(args):
     message = encrypt_and_sign(args.infile.read(), args.recipient)
-    sys.stdout.write(message)
+    sys.stdout.write('\n'.join([message[i:i + 76] for i in range(0, len(message), 76)]))
 
 
 def decrypt_stream(args):
-    message = decrypt_and_verify(args.infile.read(), args.sender)
-    sys.stdout.write(message)
+    message, verified = decrypt_and_verify(''.join(args.infile.read().split('\n')), args.sender)
+    sys.stdout.buffer.write(message)
+    if not verified:
+        sys.stderr.write('Verification failed.')
+
+
+def enum_keys(args):
+    key_enum = ''
+    for key_file in os.listdir(PUBLIC_PATH):
+        with open(os.path.join(PUBLIC_PATH, key_file)) as f:
+            key_text = f.read()
+        key = read_key(key_text)
+        hash = resin.SHA256(key_text.encode('utf-8')).hexdigest()
+        hash_formatted = ':'.join([hash[i:i + 2] for i in range(0, len(hash), 2)]).upper()
+        key_randomart = randomart.randomart(hash, 'SHA256')
+        format = f"{key['name']}:\nEmail: {key['email']}\nHash: {hash_formatted}\nKeyArt:\n{key_randomart}"
+        key_enum += format + '\n\n'
+    sys.stdout.write(key_enum.strip())
 
 
 def test():
@@ -194,18 +213,19 @@ def test():
 
 
 parser = argparse.ArgumentParser(description='Encrypt and decrypt using Fin\'s cipher. Place your private key as ./private_key/private.asc ')
-subparsers = parser.add_subparsers(title='sub-commands', description='Encryption and decryption sub-commands')
+parser.add_argument('--enumerate_keys', '-N', action='store_const', dest='func', const=enum_keys)
 
+subparsers = parser.add_subparsers(title='sub-commands', description='Encryption and decryption sub-commands')
 
 parser_encrypt = subparsers.add_parser('encrypt', aliases=['e'], help='Encrypt a message.')
 parser_encrypt.add_argument('recipient', type=str, default=None, help='The filename of the recipient\'s public key. Always defaults to the /public_keys directory.')
-parser_encrypt.add_argument('infile', nargs='?', type=argparse.FileType('rb'), default=sys.stdin.buffer.raw, help='File to encrypt. Defaults to stdin.')
+parser_encrypt.add_argument('infile', nargs='?', type=argparse.FileType('rb'), default=sys.stdin.buffer, help='File to encrypt. Defaults to stdin.')
 parser_encrypt.set_defaults(func=encrypt_stream)
 
 
 parser_decrypt = subparsers.add_parser('decrypt', aliases=['d'], help='Decrypt a message.')
 parser_decrypt.add_argument('sender', type=str, default=None, help='The filename of the sender\'s public key. Always defaults to the /public_keys directory.')
-parser_decrypt.add_argument('infile', nargs='?', type=argparse.FileType('rb'), default=sys.stdin.buffer.raw, help='The filename or path of the encrypted file. Defaults to stdin.')
+parser_decrypt.add_argument('infile', nargs='?', type=argparse.FileType('r'), default=sys.stdin, help='The filename or path of the encrypted file. Defaults to stdin.')
 parser_decrypt.set_defaults(func=decrypt_stream)
 
 
