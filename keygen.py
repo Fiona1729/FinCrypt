@@ -167,9 +167,10 @@ def gen_key_files(pub_name, priv_name, key_size, *, name, email):
     if os.path.exists(pub_name) or os.path.exists(priv_name):
         print('Key files already exist!')
         sys.exit()
-
+    print('Generating message encryption keypair')
     message_pub, message_priv = gen_key(key_size)
 
+    print('Generating message signing keypair')
     signature_priv, signature_pub = gen_key(key_size)
 
     public = '%s,%s,%s,%s,%s,%s,%s' % (to_base64(key_size), to_base64(message_pub[0]), to_base64(message_pub[1]),
@@ -185,4 +186,19 @@ def gen_key_files(pub_name, priv_name, key_size, *, name, email):
         f.write('\n'.join([private[i:i + 76] for i in range(0, len(private), 76)]))
 
 
-gen_key_files('public.asc', 'private.asc', 4096, name='Jane Doe', email='person2@example.com')
+
+
+if __name__ == '__main__':
+    print('FinCrypt key generation utility')
+
+    name = input('Please enter your name as you would like it to appear on your key.\n>>>')
+
+    email = input('Please enter the email you wish to appear on your key.\n>>>')
+
+    pub_file = input('Please enter the desired filename of the public key.\n'
+                     'Try and make it descriptive so others can easily recognize it.\n>>>')
+
+    priv_file= input('Please enter the desired filename of the private key.\n'
+                     'Rename this key private.asc and put it into your private_key directory.\n>>>')
+
+    gen_key_files(pub_file, priv_file, 4096, name=name[:50], email=email[:80])
