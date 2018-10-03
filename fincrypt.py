@@ -8,7 +8,8 @@ import base64
 import zlib
 import randomart
 import string
-import pyasn1
+from keyasn1 import FinCryptKey
+from pyasn1.codec.ber.decoder import decode
 from block import Decrypter, Encrypter, AESModeOfOperationCBC
 
 BASE_PATH = os.path.dirname(__file__)
@@ -172,22 +173,12 @@ def decode_b64_string(b64_string):
 
 
 def read_key(key_text):
-    key_parts = ''.join(key_text.split('\n')).split(',')
-    key_size = int_from_base64(key_parts[0])
+    b64_decoded = base64.urlsafe_b64decode(key_text.encode('utf-8'))
 
-    message_n = int_from_base64(key_parts[1])
+    key, _ = decode(b64_decoded, asn1Spec=FinCryptKey())
 
-    message_exp = int_from_base64(key_parts[2])
-
-    signature_n = int_from_base64(key_parts[3])
-
-    signature_exp = int_from_base64(key_parts[4])
-
-    name = decode_b64_string(key_parts[5])
-
-    email = decode_b64_string(key_parts[6])
-    return {'key_size': key_size, 'n': message_n, 'exp': message_exp, 'sig_n': signature_n, 'sig_exp': signature_exp,
-            'name': name, 'email': email}
+    return {'key_size': key['keysize'], 'n': key['mod'], 'exp': key['exp'], 'sig_n': key['sigmod'], 'sig_exp': key['sigexp'],
+            'name': key['name'], 'email': key['email']}
 
 
 def encrypt_and_sign(message, recipient):
@@ -227,7 +218,10 @@ def decrypt_and_verify(message, sender):
         decrypted_message = decrypt_message(decryption_key['n'], decryption_key['exp'], encrypted_message)
     except:
         decrypted_message = None
-    authenticated = authenticate_message(sender_key['sig_n'], sender_key['sig_exp'], encrypted_message.encode('utf-8'), signature)
+    try:
+        authenticated = authenticate_message(sender_key['sig_n'], sender_key['sig_exp'], encrypted_message.encode('utf-8'), signature)
+    except:
+        authenticated = False
 
     return decrypted_message, authenticated
 
@@ -256,11 +250,15 @@ def enum_keys(arguments):
         with open(os.path.join(PUBLIC_PATH, key_file)) as f:
             key_text = f.read()
         key = read_key(key_text)
+
         key_hash = resin.SHA512(key_text.encode('utf-8')).hexdigest()
         key_hash_formatted = ':'.join([key_hash[i:i + 2] for i in range(0, len(key_hash), 2)]).upper()
-        key_randomart = randomart.randomart(key_hash, 'SHA256')
+
+        key_randomart = randomart.randomart(key_hash, 'SHA512')
+
         formatted_key = f"{key_file}:\nName: {key['name']}:\nEmail: {key['email']}\nHash: " \
                         f"{key_hash_formatted}\nKeyArt:\n{key_randomart}"
+
         key_enum += formatted_key + '\n\n'
     sys.stdout.write(key_enum.strip())
 

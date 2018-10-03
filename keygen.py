@@ -3,22 +3,8 @@ import sys
 import os
 import string
 import base64
-from pyasn1.type import univ, char, namedtype, namedval, tag, constraint, useful
 from pyasn1.codec.der.encoder import encode
-
-class FinCryptKey(univ.Sequence):
-    pass
-
-
-FinCryptKey.componentType = namedtype.NamedTypes(
-    namedtype.NamedType('keysize', univ.Integer()),
-    namedtype.NamedType('mod', univ.Integer()),
-    namedtype.NamedType('exp', univ.Integer()),
-    namedtype.NamedType('sigmod', univ.Integer()),
-    namedtype.NamedType('sigexp', univ.Integer()),
-    namedtype.NamedType('name', char.UTF8String()),
-    namedtype.NamedType('email', char.UTF8String())
-)
+from keyasn1 import FinCryptKey
 
 
 BASE64_LITERALS = string.ascii_uppercase + string.ascii_lowercase + string.digits + '+='
@@ -262,24 +248,21 @@ def gen_key_files(pub_name, priv_name, key_size, *, name, email):
     priv_key['name'] = name
     priv_key['email'] = email
 
-
     pub_key_bytes = encode(pub_key)
     priv_key_bytes = encode(priv_key)
 
-
-    public = '%s,%s,%s,%s,%s,%s,%s' % (to_base64(key_size), to_base64(message_pub[0]), to_base64(message_pub[1]),
-                                       to_base64(signature_pub[0]), to_base64(signature_pub[1]),
-                                       encode_string(name), encode_string(email))
-
-    private = '%s,%s,%s,%s,%s,%s,%s' % (to_base64(key_size), to_base64(message_priv[0]), to_base64(message_priv[1]),
-                                        to_base64(signature_priv[0]), to_base64(signature_priv[1]),
-                                        encode_string(name), encode_string(email))
+    public = base64.urlsafe_b64encode(pub_key_bytes).decode('utf-8')
+    private = base64.urlsafe_b64encode(priv_key_bytes).decode('utf-8')
 
     with open(pub_name, 'w') as f:
+        f.write(' BEGIN FINCRYPT KEY '.center(76, '-') + '\n')
         f.write('\n'.join([public[i:i + 76] for i in range(0, len(public), 76)]))
+        f.write('\n' + ' END FINCRYPT KEY '.center(76, '-'))
 
     with open(priv_name, 'w') as f:
+        f.write(' BEGIN FINCRYPT KEY '.center(76, '-') + '\n')
         f.write('\n'.join([private[i:i + 76] for i in range(0, len(private), 76)]))
+        f.write('\n' + ' END FINCRYPT KEY '.center(76, '-'))
 
 
 if __name__ == '__main__':
@@ -297,4 +280,4 @@ if __name__ == '__main__':
 
     print('\nBeginning key generation\n\n')
 
-    gen_key_files(pub_file, priv_file, 16, name=name[:50], email=email[:80])
+    gen_key_files(pub_file, priv_file, 4096, name=name[:50], email=email[:80])
