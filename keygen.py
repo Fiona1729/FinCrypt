@@ -4,8 +4,7 @@ import os
 import string
 import base64
 from pyasn1.codec.der.encoder import encode
-from key_asn1 import FinCryptKey
-
+from key_asn1 import FinCryptPublicKey, FinCryptPrivateKey
 
 BASE64_LITERALS = string.ascii_uppercase + string.ascii_lowercase + string.digits + '+='
 
@@ -133,20 +132,17 @@ def gen_key(key_size):
     # Find a number that is coprime with PHI(n)
     # PHI(n) == (p - 1) * (q - 1)
     # This is encryption exponent
-    print('Finding E')
+    print('Finding E that is coprime with PHI(p * q)')
     while True:
         e = random.randrange(2 ** (key_size - 1), 2 ** (key_size))
         if gcd(e, (p - 1) * (q - 1)) == 1:
             break
 
     # Find the decryption exponent, which is the mod inverse of e and PHI(n)
-    print('Finding D')
+    print('Finding D that is mod inverse of e and PHI(p * q)')
     d = modinv(e, (p - 1) * (q - 1))
 
-    encryption_key = (n, e)
-    decryption_key = (n, d)
-
-    return encryption_key, decryption_key
+    return n, e, d, p, q
 
 
 def encode_string(string):
@@ -188,32 +184,38 @@ def gen_key_files(pub_name, priv_name, key_size, *, name, email):
         sys.exit()
 
     print('Generating message encryption keypair')
-    message_pub, message_priv = gen_key(key_size)
+    n, e, d, p, q = gen_key(key_size)
 
     print('Generating message signing keypair')
-    signature_priv, signature_pub = gen_key(key_size)
+    sign, sige, sigd, sigp, sigq = gen_key(key_size)
 
-    pub_key = FinCryptKey()
-    priv_key = FinCryptKey()
+    pub_key = FinCryptPublicKey()
+    priv_key = FinCryptPrivateKey()
 
-    print('The public key is 4 numbers with %s, %s, %s, and %s digits.' % (num_length(message_pub[0]),
-                                                                           num_length(message_pub[1]),
-                                                                           num_length(signature_pub[0]),
-                                                                           num_length(signature_pub[1])))
+    print('The public key is 4 numbers with %s, %s, %s, and %s digits.' % (num_length(n),
+                                                                           num_length(e),
+                                                                           num_length(sign),
+                                                                           num_length(sigd)))
 
     pub_key['keysize'] = key_size
-    pub_key['mod'] = message_pub[0]
-    pub_key['exp'] = message_pub[1]
-    pub_key['sigmod'] = signature_pub[0]
-    pub_key['sigexp'] = signature_pub[1]
+    pub_key['modulus'] = n
+    pub_key['exponent'] = e
+    pub_key['sigModulus'] = sign
+    pub_key['sigExponent'] = sigd
     pub_key['name'] = name
     pub_key['email'] = email
 
     priv_key['keysize'] = key_size
-    priv_key['mod'] = message_priv[0]
-    priv_key['exp'] = message_priv[1]
-    priv_key['sigmod'] = signature_priv[0]
-    priv_key['sigexp'] = signature_priv[1]
+    priv_key['modulus'] = n
+    priv_key['publicExponent'] = e
+    priv_key['privateExponent'] = d
+    priv_key['primeP'] = p
+    priv_key['primeQ'] = q
+    priv_key['sigModulus'] = sign
+    priv_key['sigPublicExponent'] = sigd
+    priv_key['sigPrivateExponent'] = sige
+    priv_key['sigPrimeP'] = sigp
+    priv_key['sigPrimeQ'] = sigq
     priv_key['name'] = name
     priv_key['email'] = email
 
@@ -235,7 +237,7 @@ def gen_key_files(pub_name, priv_name, key_size, *, name, email):
 
 
 if __name__ == '__main__':
-    print('FinCrypt key generation utility')
+    print('FinCrypt Key Generation Utility')
 
     name = input('Please enter your name as you would like it to appear on your key.\n>>>')
 

@@ -1,11 +1,9 @@
 import itertools
 from collections import Counter
 
-
 # the bishop starts in the center of the room
 STARTING_POSITION = (8, 4)
 ROOM_DIMENSIONS = (17, 9)
-
 
 # encode start and end positions
 COIN_VALUE_STARTING_POSITION = 15
@@ -14,6 +12,7 @@ COIN_VALUE_ENDING_POSITION = 16
 
 class Direction(object):
     """Encode a sense of direction."""
+
     def __init__(self, dx, dy):
         self.dx = dx
         self.dy = dy
@@ -40,15 +39,18 @@ def bit_pairs(binary):
     Convert a word into bit pairs little-endian style.
     '10100011' => ['11', '00', '10', '10']
     """
+
     def take(n, iterable):
         "Return first n items of the iterable as a list"
         return list(itertools.islice(iterable, n))
+
     def all_pairs(iterable):
         while True:
             pair = take(2, iterable)
             if not pair:
                 break
             yield ''.join(pair)
+
     pairs = list(all_pairs(iter(binary)))
     return list(reversed(pairs))
 
@@ -64,7 +66,7 @@ def directions_from_fingerprint(fingerprint):
         '10': SW,
         '11': SE,
     }
-    for hex_byte in [fingerprint[i:i+2] for i in range(0, len(fingerprint), 2)]:
+    for hex_byte in [fingerprint[i:i + 2] for i in range(0, len(fingerprint), 2)]:
         binary = hex_byte_to_binary(hex_byte)
         # read each bit-pair in each word right-to-left (little endian)
         for bit_pair in bit_pairs(binary):
@@ -131,7 +133,7 @@ def display_room(room, title):
     for y in range(Y):
         room_str += '|'
         for x in range(X):
-            count = room[(x,y)]
+            count = room[(x, y)]
             room_str += coin(count)
         room_str += "|\n"
     room_str += '+' + ('[' + title + ']').center(X, '-') + '+'

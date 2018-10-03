@@ -7,15 +7,13 @@ import argparse
 import base64
 import zlib
 import randomart
-import string
 import re
-from key_asn1 import FinCryptKey
+from key_asn1 import FinCryptPublicKey, FinCryptPrivateKey
 from message_asn1 import FinCryptMessage
 from pyasn1.codec.ber.decoder import decode as decode_ber
 from pyasn1.codec.native.encoder import encode as encode_native
 from pyasn1.codec.der.encoder import encode as encode_der
 from block import Decrypter, Encrypter, AESModeOfOperationCBC
-
 
 BASE_PATH = os.path.dirname(__file__)
 PUBLIC_PATH = os.path.join(BASE_PATH, 'public_keys')
@@ -81,7 +79,6 @@ def encrypt_message(n, e, message, key_size):
 def decrypt_message(n, d, encrypted_key, encrypted_iv, encrypted_message):
     decrypted_key = []
     decrypted_iv = []
-    decrypted_message = []
 
     for block in encrypted_key:
         decrypted_key.append(decrypt_number(n, d, block))
@@ -123,35 +120,57 @@ def authenticate_message(n, d, plaintext, encrypted_blocks):
 
 
 def strip_headers(pem_text):
-    match = re.match(r'(?:-+ (BEGIN FINCRYPT (?:PUBLIC |PRIVATE )?(?:KEY|MESSAGE)) -+\n)([a-zA-Z0-9\n+\/=]+)(?:-+ END FINCRYPT (?:PUBLIC |PRIVATE )?(?:KEY|MESSAGE) -+)', pem_text)
+    match = re.match(
+        r'(?:-+ (BEGIN FINCRYPT (?:PUBLIC |PRIVATE )?(?:KEY|MESSAGE)) -+\n)([a-zA-Z0-9\n+/=]+)(?:-+ END FINCRYPT (?:PUBLIC |PRIVATE )?(?:KEY|MESSAGE) -+)',
+        pem_text)
     if match is None:
-      return None, None
+        return None, None
     return match[1], match[2]
 
 
 def read_message(message_text):
     header, message = strip_headers(message_text)
     if header != 'BEGIN FINCRYPT MESSAGE':
-      sys.stderr.write('Message was malformed.')
-      sys.exit()
+        sys.stderr.write('Message was malformed.')
+        sys.exit()
     return message
 
 
-def read_key(key_text, desired_header):
+def read_public_key(key_text):
     key_header, key_text = strip_headers(key_text)
 
-    if key_header is None or key_header != desired_header:
+    if key_header is None or key_header != 'BEGIN FINCRYPT PUBLIC KEY':
         raise Exception
 
     try:
         b64_decoded = base64.urlsafe_b64decode(key_text.encode('utf-8'))
-        key, _ = decode_ber(b64_decoded, asn1Spec=FinCryptKey())
+        key, _ = decode_ber(b64_decoded, asn1Spec=FinCryptPublicKey())
         key = encode_native(key)
     except:
         raise Exception
 
-    return {'key_size': key['keysize'], 'n': key['mod'], 'exp': key['exp'], 'sig_n': key['sigmod'], 'sig_exp': key['sigexp'],
-            'name': key['name'], 'email': key['email']}
+    return {'keysize': key['keysize'], 'modulus': key['modulus'], 'exponent':
+        key['exponent'], 'sigModulus': key['sigModulus'], 'sigExponent':
+                key['sigExponent'], 'name': key['name'], 'email': key['email']}
+
+
+def read_private_key(key_text):
+    key_header, key_text = strip_headers(key_text)
+
+    if key_header is None or key_header != 'BEGIN FINCRYPT PRIVATE KEY':
+        raise Exception
+
+    try:
+        b64_decoded = base64.urlsafe_b64decode(key_text.encode('utf-8'))
+        key, _ = decode_ber(b64_decoded, asn1Spec=FinCryptPrivateKey())
+        key = encode_native(key)
+    except:
+        raise Exception
+
+    return {'keysize': key['keysize'], 'modulus': key['modulus'], 'publicExponent':
+        key['publicExponent'], 'privateExponent': key['privateExponent'],
+            'sigModulus': key['sigModulus'], 'sigPublicExponent': key['sigPublicExponent'],
+            'sigPrivateExponent': key['sigPrivateExponent'], 'name': key['name'], 'email': key['email']}
 
 
 def encrypt_and_sign(message, recipient):
@@ -160,23 +179,25 @@ def encrypt_and_sign(message, recipient):
     if not os.path.exists(recipient_key):
         print('Recipient keyfile does not exist.')
         sys.exit()
+
     try:
         with open(recipient_key) as f:
-            recipient_key = read_key(f.read(), 'BEGIN FINCRYPT PUBLIC KEY')
+            recipient_key = read_public_key(f.read())
     except:
         sys.stderr.write('Recipient\'s key file is malformed.')
         sys.exit()
 
     try:
         with open(PRIVATE_KEY) as f:
-            signer_key = read_key(f.read(), 'BEGIN FINCRYPT PRIVATE KEY')
+            signer_key = read_private_key(f.read())
     except:
         sys.stderr.write('Private key file is malformed or does not exist.')
         sys.exit()
 
-
-    encrypted_key, encrypted_iv, encrypted_blocks = encrypt_message(recipient_key['n'], recipient_key['exp'], message, recipient_key['key_size'])
-    signature = sign_message(signer_key['sig_n'], signer_key['sig_exp'], message, signer_key['key_size'])
+    encrypted_key, encrypted_iv, encrypted_blocks = encrypt_message(recipient_key['modulus'], recipient_key['exponent'],
+                                                                    message,
+                                                                    recipient_key['keysize'])
+    signature = sign_message(signer_key['sigModulus'], signer_key['sigPrivateExponent'], message, signer_key['keysize'])
 
     encrypted_message = FinCryptMessage()
 
@@ -196,16 +217,19 @@ def decrypt_and_verify(message, sender):
     if not os.path.exists(sender_key):
         print('Sender keyfile does not exist.')
         sys.exit()
+
     try:
         with open(PRIVATE_KEY) as f:
-            decryption_key = read_key(f.read(), 'BEGIN FINCRYPT PRIVATE KEY')
+            decryption_key = read_private_key(f.read())
     except:
         sys.stderr.write('Private key file is malformed or does not exist.')
+
     try:
         with open(sender_key) as f:
-            sender_key = read_key(f.read(), 'BEGIN FINCRYPT PUBLIC KEY')
+            sender_key = read_public_key(f.read())
     except:
         sys.stderr.write('Sender key file is malformed.')
+
     try:
         decoded, _ = decode_ber(message, asn1Spec=FinCryptMessage())
         decoded = encode_native(decoded)
@@ -213,12 +237,15 @@ def decrypt_and_verify(message, sender):
         return None, False
 
     try:
-        decrypted_message = decrypt_message(decryption_key['n'], decryption_key['exp'], decoded['key'], decoded['iv'], decoded['message'])
+        decrypted_message = decrypt_message(decryption_key['modulus'], decryption_key['privateExponent'],
+                                            decoded['key'], decoded['iv'],
+                                            decoded['message'])
     except:
         decrypted_message = None
 
     try:
-        authenticated = authenticate_message(sender_key['sig_n'], sender_key['sig_exp'], decrypted_message, decoded['signature'])
+        authenticated = authenticate_message(sender_key['sigModulus'], sender_key['sigExponent'], decrypted_message,
+                                             decoded['signature'])
     except:
         authenticated = False
 
@@ -241,6 +268,7 @@ def decrypt_text(arguments):
     in_message = base64.b64decode(in_message)
 
     message, verified = decrypt_and_verify(in_message, arguments.sender)
+
     if message is None:
         sys.stderr.write('Decryption failed.\n')
     else:
@@ -248,6 +276,7 @@ def decrypt_text(arguments):
             sys.stdout.buffer.write(zlib.decompress(message))
         except:
             sys.stderr.write('Decompression failed.\n')
+
     if not verified:
         sys.stderr.write('Verification failed. Message is not intact.\n')
 
@@ -262,6 +291,7 @@ def decrypt_binary(arguments):
     in_message = arguments.infile.read()
 
     message, verified = decrypt_and_verify(in_message, arguments.sender)
+
     if message is None:
         sys.stderr.write('Decryption failed.\n')
     else:
@@ -269,6 +299,7 @@ def decrypt_binary(arguments):
             sys.stdout.buffer.write(zlib.decompress(message))
         except:
             sys.stderr.write('Decompression failed.\n')
+
     if not verified:
         sys.stderr.write('Verification failed. Message is not intact.\n')
 
@@ -278,7 +309,8 @@ def enum_keys(arguments):
     for key_file in os.listdir(PUBLIC_PATH):
         with open(os.path.join(PUBLIC_PATH, key_file)) as f:
             key_text = f.read()
-        key = read_key(key_text, 'BEGIN FINCRYPT PUBLIC KEY')
+
+        key = read_public_key(key_text)
 
         key_hash = resin.SHA512(key_text.encode('utf-8')).hexdigest()
         key_hash_formatted = ':'.join([key_hash[i:i + 2] for i in range(0, len(key_hash), 2)]).upper()
@@ -289,6 +321,7 @@ def enum_keys(arguments):
                         f"{key_hash_formatted}\nKeyArt:\n{key_randomart}"
 
         key_enum += formatted_key + '\n\n'
+
     sys.stdout.write(key_enum.strip())
 
 
@@ -303,7 +336,7 @@ def main():
     parser_encrypt = subparsers.add_parser('encrypt', aliases=['e'], help='Encrypt a message/file.')
     parser_encrypt.add_argument('recipient', type=str, default=None,
                                 help='The filename of the recipient\'s public key. '
-                                    'Always defaults to the /public_keys directory.')
+                                     'Always defaults to the /public_keys directory.')
     parser_encrypt.add_argument('infile', nargs='?', type=argparse.FileType('rb'), default=sys.stdin.buffer,
                                 help='File to encrypt. Defaults to stdin.')
     parser_encrypt.set_defaults(func=encrypt_text)
@@ -311,32 +344,31 @@ def main():
     parser_decrypt = subparsers.add_parser('decrypt', aliases=['d'], help='Decrypt a message.')
     parser_decrypt.add_argument('sender', type=str, default=None,
                                 help='The filename of the sender\'s public key. '
-                                    'Always defaults to the /public_keys directory.')
+                                     'Always defaults to the /public_keys directory.')
     parser_decrypt.add_argument('infile', nargs='?', type=argparse.FileType('r'), default=sys.stdin,
                                 help='The filename or path of the encrypted file. Defaults to stdin.')
     parser_decrypt.set_defaults(func=decrypt_text)
 
-
-    parser_encrypt_binary = subparsers.add_parser('encryptbin', aliases=['eb'], help='Encrypt a message/file with binary encoding. '
-                                                                                     'Provides space savings at the cost of readability.')
+    parser_encrypt_binary = subparsers.add_parser('encryptbin', aliases=['eb'],
+                                                  help='Encrypt a message/file with binary encoding. '
+                                                       'Provides space savings at the cost of readability.')
     parser_encrypt_binary.add_argument('recipient', type=str, default=None,
-                                help='The filename of the recipient\'s public key. '
-                                    'Always defaults to the /public_keys directory.')
+                                       help='The filename of the recipient\'s public key. '
+                                            'Always defaults to the /public_keys directory.')
     parser_encrypt_binary.add_argument('infile', nargs='?', type=argparse.FileType('rb'), default=sys.stdin.buffer,
-                                help='File to encrypt. Defaults to stdin.')
+                                       help='File to encrypt. Defaults to stdin.')
     parser_encrypt_binary.set_defaults(func=encrypt_binary)
 
-    parser_decrypt_binary = subparsers.add_parser('decryptbin', aliases=['db'], help='Decrypt a message/file with binary encoding.')
+    parser_decrypt_binary = subparsers.add_parser('decryptbin', aliases=['db'],
+                                                  help='Decrypt a message/file with binary encoding.')
     parser_decrypt_binary.add_argument('sender', type=str, default=None,
-                                help='The filename of the sender\'s public key. '
-                                    'Always defaults to the /public_keys directory.')
+                                       help='The filename of the sender\'s public key. '
+                                            'Always defaults to the /public_keys directory.')
     parser_decrypt_binary.add_argument('infile', nargs='?', type=argparse.FileType('rb'), default=sys.stdin,
-                                help='The filename or path of the encrypted file. Defaults to stdin.')
+                                       help='The filename or path of the encrypted file. Defaults to stdin.')
     parser_decrypt_binary.set_defaults(func=decrypt_binary)
 
-
     args = parser.parse_args()
-
 
     if args.func is None:
         parser.print_help()

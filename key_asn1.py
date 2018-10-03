@@ -1,15 +1,35 @@
 from pyasn1.type import univ, char, namedtype, namedval, tag, constraint, useful
 
-class FinCryptKey(univ.Sequence):
+class FinCryptPublicKey(univ.Sequence):
     pass
 
 
-FinCryptKey.componentType = namedtype.NamedTypes(
+FinCryptPublicKey.componentType = namedtype.NamedTypes(
     namedtype.NamedType('keysize', univ.Integer()),
-    namedtype.NamedType('mod', univ.Integer()),
-    namedtype.NamedType('exp', univ.Integer()),
-    namedtype.NamedType('sigmod', univ.Integer()),
-    namedtype.NamedType('sigexp', univ.Integer()),
+    namedtype.NamedType('modulus', univ.Integer()),
+    namedtype.NamedType('exponent', univ.Integer()),
+    namedtype.NamedType('sigModulus', univ.Integer()),
+    namedtype.NamedType('sigExponent', univ.Integer()),
+    namedtype.NamedType('name', char.UTF8String()),
+    namedtype.NamedType('email', char.UTF8String())
+)
+
+class FinCryptPrivateKey(univ.Sequence):
+    pass
+
+
+FinCryptPrivateKey.componentType = namedtype.NamedTypes(
+    namedtype.NamedType('keysize', univ.Integer()),
+    namedtype.NamedType('modulus', univ.Integer()),
+    namedtype.NamedType('publicExponent', univ.Integer()),
+    namedtype.NamedType('privateExponent', univ.Integer()),
+    namedtype.NamedType('primeP', univ.Integer()),
+    namedtype.NamedType('primeQ', univ.Integer()),
+    namedtype.NamedType('sigModulus', univ.Integer()),
+    namedtype.NamedType('sigPublicExponent', univ.Integer()),
+    namedtype.NamedType('sigPrivateExponent', univ.Integer()),
+    namedtype.NamedType('sigPrimeP', univ.Integer()),
+    namedtype.NamedType('sigPrimeQ', univ.Integer()),
     namedtype.NamedType('name', char.UTF8String()),
     namedtype.NamedType('email', char.UTF8String())
 )
