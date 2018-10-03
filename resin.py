@@ -121,7 +121,7 @@ class SHA512(object):
         return b''.join([struct.pack('!Q', i) for i in r._h[:self._output_size]])
 
     def hexdigest(self):
-        return self.digest().encode('hex')
+        return self.digest().hex()
 
     def copy(self):
         return copy.deepcopy(self)

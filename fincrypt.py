@@ -255,7 +255,7 @@ def enum_keys(arguments):
         with open(os.path.join(PUBLIC_PATH, key_file)) as f:
             key_text = f.read()
         key = read_key(key_text)
-        key_hash = resin.SHA256(key_text.encode('utf-8')).hexdigest()
+        key_hash = resin.SHA512(key_text.encode('utf-8')).hexdigest()
         key_hash_formatted = ':'.join([key_hash[i:i + 2] for i in range(0, len(key_hash), 2)]).upper()
         key_randomart = randomart.randomart(key_hash, 'SHA256')
         formatted_key = f"{key_file}:\nName: {key['name']}:\nEmail: {key['email']}\nHash: " \
