@@ -996,11 +996,6 @@ def strip_PKCS7_padding(data):
 PADDING_NONE = 'none'
 PADDING_DEFAULT = 'default'
 
-
-# @TODO: Ciphertext stealing and explicit PKCS#7
-# PADDING_CIPHERTEXT_STEALING
-# PADDING_PKCS7
-
 # ECB and CBC are block-only ciphers
 
 def _block_can_consume(self, size):
