@@ -285,7 +285,7 @@ def enum_keys(arguments):
 
         key_randomart = randomart.randomart(key_hash, 'SHA512')
 
-        formatted_key = f"{key_file}:\nName: {key['name']}\nEmail: {key['email']}\nHash: " \
+        formatted_key = f"{key_file}:\nName: {key['name'].decode('utf-8')}\nEmail: {key['email'].decode('utf-8')}\nHash: " \
                         f"{key_hash_formatted}\nKeyArt:\n{key_randomart}"
 
         key_enum += formatted_key + '\n\n'
