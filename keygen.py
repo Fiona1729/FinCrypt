@@ -1,4 +1,25 @@
-import random, sys, os, string, base64, argparse
+import random
+import sys
+import os
+import string
+import base64
+from pyasn1.type import univ, char, namedtype, namedval, tag, constraint, useful
+from pyasn1.codec.der.encoder import encode
+
+class FinCryptKey(univ.Sequence):
+    pass
+
+
+FinCryptKey.componentType = namedtype.NamedTypes(
+    namedtype.NamedType('keysize', univ.Integer()),
+    namedtype.NamedType('mod', univ.Integer()),
+    namedtype.NamedType('exp', univ.Integer()),
+    namedtype.NamedType('sigmod', univ.Integer()),
+    namedtype.NamedType('sigexp', univ.Integer()),
+    namedtype.NamedType('name', char.UTF8String()),
+    namedtype.NamedType('email', char.UTF8String())
+)
+
 
 BASE64_LITERALS = string.ascii_uppercase + string.ascii_lowercase + string.digits + '+='
 
@@ -210,16 +231,41 @@ def gen_key_files(pub_name, priv_name, key_size, *, name, email):
     if os.path.exists(pub_name) or os.path.exists(priv_name):
         print('Key files already exist!')
         sys.exit()
+
     print('Generating message encryption keypair')
     message_pub, message_priv = gen_key(key_size)
 
     print('Generating message signing keypair')
     signature_priv, signature_pub = gen_key(key_size)
 
+    pub_key = FinCryptKey()
+    priv_key = FinCryptKey()
+
     print('The public key is 4 numbers with %s, %s, %s, and %s digits.' % (num_length(message_pub[0]),
                                                                            num_length(message_pub[1]),
                                                                            num_length(signature_pub[0]),
                                                                            num_length(signature_pub[1])))
+
+    pub_key['keysize'] = key_size
+    pub_key['mod'] = message_pub[0]
+    pub_key['exp'] = message_pub[1]
+    pub_key['sigmod'] = signature_pub[0]
+    pub_key['sigexp'] = signature_pub[1]
+    pub_key['name'] = name
+    pub_key['email'] = email
+
+    priv_key['keysize'] = key_size
+    priv_key['mod'] = message_priv[0]
+    priv_key['exp'] = message_priv[1]
+    priv_key['sigmod'] = signature_priv[0]
+    priv_key['sigexp'] = signature_priv[1]
+    priv_key['name'] = name
+    priv_key['email'] = email
+
+
+    pub_key_bytes = encode(pub_key)
+    priv_key_bytes = encode(priv_key)
+
 
     public = '%s,%s,%s,%s,%s,%s,%s' % (to_base64(key_size), to_base64(message_pub[0]), to_base64(message_pub[1]),
                                        to_base64(signature_pub[0]), to_base64(signature_pub[1]),
@@ -251,4 +297,4 @@ if __name__ == '__main__':
 
     print('\nBeginning key generation\n\n')
 
-    gen_key_files(pub_file, priv_file, 4096, name=name[:50], email=email[:80])
+    gen_key_files(pub_file, priv_file, 16, name=name[:50], email=email[:80])

@@ -8,6 +8,7 @@ import base64
 import zlib
 import randomart
 import string
+import pyasn1
 from block import Decrypter, Encrypter, AESModeOfOperationCBC
 
 BASE_PATH = os.path.dirname(__file__)
