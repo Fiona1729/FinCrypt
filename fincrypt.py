@@ -267,7 +267,7 @@ def enum_keys(arguments):
 parser = argparse.ArgumentParser(
     description='Encrypt and decrypt using FinCrypt. Place your private key as '
                 './private_key/private.asc, and distribute your public key.')
-parser.add_argument('--enumerate_keys', '-N', action='store_const', dest='func', const=enum_keys)
+parser.add_argument('--enumerate-keys', '-N', action='store_const', dest='func', const=enum_keys)
 subparsers = parser.add_subparsers(title='sub-commands', description='Encryption and decryption sub-commands')
 
 parser_encrypt = subparsers.add_parser('encrypt', aliases=['e'], help='Encrypt a message.')
