@@ -124,7 +124,7 @@ def sign_message(n, e, message, key_size):
 
     block_size = key_size // 8
 
-    message_hash = resin.SHA256(message).digest()
+    message_hash = resin.SHA512(message).digest()
 
     for block in get_blocks(message_hash, block_size):
         encrypted_blocks.append(encrypt_number(n, e, block))
@@ -146,7 +146,7 @@ def authenticate_message(n, d, plaintext, encrypted_hash):
         decrypted_blocks.append(decrypt_number(n, d, block))
 
     alleged_hash = get_text(decrypted_blocks)
-    return alleged_hash == resin.SHA256(plaintext).digest()
+    return alleged_hash == resin.SHA512(plaintext).digest()
 
 
 def int_to_base64(x):
