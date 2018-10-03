@@ -4,7 +4,7 @@ import os
 import string
 import base64
 from pyasn1.codec.der.encoder import encode
-from keyasn1 import FinCryptKey
+from key_asn1 import FinCryptKey
 
 
 BASE64_LITERALS = string.ascii_uppercase + string.ascii_lowercase + string.digits + '+='
@@ -115,37 +115,6 @@ def gen_prime(prime_size=4096):
             return num
 
 
-def to_base64(x):
-    """
-    Converts an integer to base64 representation.
-
-    :param x: X
-    :return: Base64 encoded x
-    """
-
-    digits = []
-    while x:
-        digits.append(BASE64_LITERALS[x % 64])
-        x //= 64
-    digits.reverse()
-    return ''.join(digits)
-
-
-def from_base64(base64):
-    """
-    Decodes an integer from base64 back to integer form.
-
-    :param base64: Base64 encoded integer
-    :return: Integer
-    """
-
-    block_num = 0
-    base64 = base64[::-1]
-    for i, char in enumerate(base64):
-        block_num += BASE64_LITERALS.find(char) * (64 ** i)
-    return block_num
-
-
 def gen_key(key_size):
     """
     Generates an RSA encryption and decryption keypair.
@@ -251,18 +220,18 @@ def gen_key_files(pub_name, priv_name, key_size, *, name, email):
     pub_key_bytes = encode(pub_key)
     priv_key_bytes = encode(priv_key)
 
-    public = base64.urlsafe_b64encode(pub_key_bytes).decode('utf-8')
-    private = base64.urlsafe_b64encode(priv_key_bytes).decode('utf-8')
+    public = base64.b64encode(pub_key_bytes).decode('utf-8')
+    private = base64.b64encode(priv_key_bytes).decode('utf-8')
 
     with open(pub_name, 'w') as f:
-        f.write(' BEGIN FINCRYPT KEY '.center(76, '-') + '\n')
+        f.write(' BEGIN FINCRYPT PUBLIC KEY '.center(76, '-') + '\n')
         f.write('\n'.join([public[i:i + 76] for i in range(0, len(public), 76)]))
-        f.write('\n' + ' END FINCRYPT KEY '.center(76, '-'))
+        f.write('\n' + ' END FINCRYPT PUBLIC KEY '.center(76, '-'))
 
     with open(priv_name, 'w') as f:
-        f.write(' BEGIN FINCRYPT KEY '.center(76, '-') + '\n')
+        f.write(' BEGIN FINCRYPT PRIVATE KEY '.center(76, '-') + '\n')
         f.write('\n'.join([private[i:i + 76] for i in range(0, len(private), 76)]))
-        f.write('\n' + ' END FINCRYPT KEY '.center(76, '-'))
+        f.write('\n' + ' END FINCRYPT PRIVATE KEY '.center(76, '-'))
 
 
 if __name__ == '__main__':
