@@ -112,7 +112,7 @@ def sign_message(n, e, message, key_size):
     return encrypted_blocks
 
 
-def authenticate_message(n, d, plaintext, encrypted_blocks): 
+def authenticate_message(n, d, plaintext, encrypted_blocks):
     decrypted_blocks = []
 
     for block in encrypted_blocks:
@@ -142,14 +142,14 @@ def read_key(key_text, desired_header):
 
     if key_header is None or key_header != desired_header:
         raise Exception
-    
+
     try:
         b64_decoded = base64.urlsafe_b64decode(key_text.encode('utf-8'))
         key, _ = decode_ber(b64_decoded, asn1Spec=FinCryptKey())
         key = encode_native(key)
     except:
         raise Exception
-    
+
     return {'key_size': key['keysize'], 'n': key['mod'], 'exp': key['exp'], 'sig_n': key['sigmod'], 'sig_exp': key['sigexp'],
             'name': key['name'], 'email': key['email']}
 
@@ -160,7 +160,7 @@ def encrypt_and_sign(message, recipient):
     if not os.path.exists(recipient_key):
         print('Recipient keyfile does not exist.')
         sys.exit()
-    try: 
+    try:
         with open(recipient_key) as f:
             recipient_key = read_key(f.read(), 'BEGIN FINCRYPT PUBLIC KEY')
     except:
@@ -216,7 +216,7 @@ def decrypt_and_verify(message, sender):
         decrypted_message = decrypt_message(decryption_key['n'], decryption_key['exp'], decoded['key'], decoded['iv'], decoded['message'])
     except:
         decrypted_message = None
-    
+
     try:
         authenticated = authenticate_message(sender_key['sig_n'], sender_key['sig_exp'], decrypted_message, decoded['signature'])
     except:
@@ -229,7 +229,7 @@ def encrypt_text(arguments):
     message = encrypt_and_sign(zlib.compress(arguments.infile.read()), arguments.recipient)
 
     message = base64.b64encode(message).decode('utf-8')
-    
+
     sys.stdout.write(' BEGIN FINCRYPT MESSAGE '.center(76, '-') + '\n')
     sys.stdout.write('\n'.join([message[i:i + 76] for i in range(0, len(message), 76)]))
     sys.stdout.write('\n' + ' END FINCRYPT MESSAGE '.center(76, '-'))
@@ -237,7 +237,7 @@ def encrypt_text(arguments):
 
 def decrypt_text(arguments):
     in_message = ''.join(read_message(arguments.infile.read()).split('\n'))
-    
+
     in_message = base64.b64decode(in_message)
 
     message, verified = decrypt_and_verify(in_message, arguments.sender)
@@ -333,8 +333,8 @@ def main():
     parser_decrypt_binary.add_argument('infile', nargs='?', type=argparse.FileType('rb'), default=sys.stdin,
                                 help='The filename or path of the encrypted file. Defaults to stdin.')
     parser_decrypt_binary.set_defaults(func=decrypt_binary)
-    
-    
+
+
     args = parser.parse_args()
 
 

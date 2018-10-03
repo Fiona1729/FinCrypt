@@ -1,9 +1,6 @@
 import itertools
 from collections import Counter
 
-"""
-Implementation of the SSH Randomart visualizer by github.com/fredrik
-"""
 
 # the bishop starts in the center of the room
 STARTING_POSITION = (8, 4)
