@@ -19,6 +19,7 @@ def gcd(a, b):
     :param b: B
     :return: GCD
     """
+
     while a != 0:
         a, b = b % a, a
     return b
@@ -164,6 +165,7 @@ def num_length(num):
     :param num: Num
     :return: Length in digits
     """
+
     return len(str(num))
 
 
