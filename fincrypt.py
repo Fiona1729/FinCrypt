@@ -20,7 +20,21 @@ PUBLIC_PATH = os.path.join(BASE_PATH, 'public_keys')
 PRIVATE_KEY = os.path.join(BASE_PATH, 'private_key', 'private.asc')
 
 
+class FinCryptDecodingError(Exception):
+    def __init__(self, *args, **kwargs):
+        Exception.__init__(self, *args, **kwargs)
+
+
 def get_blocks(message, block_size=256):
+    """
+    Splits a message (bytes) into blocks of size block_size, then encodes each block
+    as a base 256 integer. Can be reversed using get_bytes
+
+    :param message: Message (bytes)
+    :param block_size: Block size (int)
+    :return: Blocks (list of int)
+    """
+
     block_nums = []
     for block in [message[i:i + block_size] for i in range(0, len(message), block_size)]:
         block_num = 0
@@ -31,7 +45,15 @@ def get_blocks(message, block_size=256):
     return block_nums
 
 
-def get_text(block_nums):
+def get_bytes(block_nums):
+    """
+    Takes an array of block integers and turns them back into a bytes object.
+    Decodes using base 256.
+
+    :param block_nums: Blocks (list of ints)
+    :return: Original data (bytes)
+    """
+
     message = []
     for block in block_nums:
         block_text = []
@@ -45,14 +67,53 @@ def get_text(block_nums):
 
 
 def encrypt_number(n, e, num):
+    """
+    Encrypts a number using the RSA cipher
+    NOTE:
+    Just the pow function with renamed arguments. Used for better code readability.
+
+    :param n: Encryption modulus (int)
+    :param e: Encryption exponent (int)
+    :param num: Number to encrypt (int)
+    :return: Encrypted value (int)
+    """
+
     return pow(num, e, n)
 
 
 def decrypt_number(n, d, num):
+    """
+    Decrypts a number using the RSA cipher
+    NOTE:
+    Just the pow function with renamed arguments. Used for better code readability.
+
+    :param n: Decryption modulus (int)
+    :param d: Decryption exponent (int)
+    :param num: Number to Decrypt (int)
+    :return: Original number (int)
+    """
+
     return pow(num, d, n)
 
 
 def encrypt_message(n, e, message, key_size):
+    """
+    Encrypts a message using RSA and AES-256
+    First generates a random AES key and IV with os.urandom()
+    Then encrypts the original message with that key
+    Then encrypts the AES key with the RSA key
+
+    NOTE:
+    This means that plaintext will not have the same ciphertext
+    when encrypted twice. Keep this in mind if you require reproducibility behavior
+
+    :param n: Encryption modulus (int)
+    :param e: Encryption exponent (int)
+    :param message: Message (bytes)
+    :param key_size: The keysize, in bits, of the RSA public key (int)
+    :return: Tuple (encrypted key (list of ints), encrypted IV (list of ints), and encrypted message (bytes))
+    """
+
     encrypted_key = []
     encrypted_iv = []
 
@@ -77,16 +138,29 @@ def encrypt_message(n, e, message, key_size):
 
 
 def decrypt_message(n, d, encrypted_key, encrypted_iv, encrypted_message):
+    """
+    Decrypts a message encrypted by the encrypt_message function
+    First decrypts the AES key and IV using RSA
+    Then decrypts the data using the AES key and IV
+
+    :param n: Decryption modulus (int)
+    :param d: Decryption exponent (int)
+    :param encrypted_key: RSA encrypted key (list of ints)
+    :param encrypted_iv: RSA encrypted IV (list of ints)
+    :param encrypted_message: AES encrypted data (bytes
+    :return: Decrypted data (bytes)
+    """
+
     decrypted_key = []
     decrypted_iv = []
 
     for block in encrypted_key:
         decrypted_key.append(decrypt_number(n, d, block))
-    decrypted_key = get_text(decrypted_key)
+    decrypted_key = get_bytes(decrypted_key)
 
     for block in encrypted_iv:
         decrypted_iv.append(decrypt_number(n, d, block))
-    decrypted_iv = get_text(decrypted_iv)
+    decrypted_iv = get_bytes(decrypted_iv)
 
     message_decryptor = Decrypter(mode=AESModeOfOperationCBC(decrypted_key, iv=decrypted_iv))
 
@@ -97,6 +171,19 @@ def decrypt_message(n, d, encrypted_key, encrypted_iv, encrypted_message):
 
 
 def sign_message(n, e, message, key_size):
+    """
+    Signs a message using an RSA signature private key (n and e), a message,
+    and keysize
+
+    Computes SHA512 hash of plaintext, and then encrypts it with private key
+
+    :param n: Encryption modulus (int)
+    :param e: Encryption exponent (int)
+    :param message: Message to sign (bytes)
+    :param key_size: Key size in bits (int)
+    :return: Signature (list of ints)
+    """
+
     encrypted_blocks = []
 
     block_size = key_size // 8
@@ -110,89 +197,144 @@ def sign_message(n, e, message, key_size):
 
 
 def authenticate_message(n, d, plaintext, encrypted_blocks):
+    """
+    Authenticates a message when given a plaintext and signature
+
+    Decrypts hash with public key, and compares alleged hash with actual
+    hash of plaintext.
+
+    :param n: Decryption modulus (int)
+    :param d: Decryption exponent (int)
+    :param plaintext: Decrypted plaintext to verify (bytes)
+    :param encrypted_blocks: The signature (list of ints)
+    :return: Whether the message signature is valid (boolean)
+    """
+
     decrypted_blocks = []
 
     for block in encrypted_blocks:
         decrypted_blocks.append(decrypt_number(n, d, block))
 
-    alleged_hash = get_text(decrypted_blocks)
+    alleged_hash = get_bytes(decrypted_blocks)
     return alleged_hash == sha.SHA512(plaintext).digest()
 
 
 def strip_headers(pem_text):
+    """
+    Strips the headers off a a FinCrypt key or message.
+
+    :param pem_text: Text of key or message (string)
+    :return: Tuple (header (ie. 'BEGIN FINCRYPT MESSAGE'), base64 (string))
+    """
+
     match = re.match(
-        r'(?:-+ (BEGIN FINCRYPT (?:PUBLIC |PRIVATE )?(?:KEY|MESSAGE)) -+\n)([a-zA-Z0-9\n+/=]+)(?:-+ END FINCRYPT (?:PUBLIC |PRIVATE )?(?:KEY|MESSAGE) -+)',
-        pem_text)
+        r'(?:-+ (BEGIN FINCRYPT (?:PUBLIC |PRIVATE )?(?:KEY|MESSAGE)) -+\n)([a-zA-Z0-9\n+/=]+)'
+        r'(?:-+ END FINCRYPT (?:PUBLIC |PRIVATE )?(?:KEY|MESSAGE) -+)', pem_text)
     if match is None:
         return None, None
     return match[1], match[2]
 
 
 def read_message(message_text):
+    """
+    Reads a message, strips off and validates headers.
+    Raises ValueError if the message was malformed.
+
+    :param message_text: Message text (string)
+    :return: Base64 of message (string)
+    """
+
     header, message = strip_headers(message_text)
     if header != 'BEGIN FINCRYPT MESSAGE':
-        sys.stderr.write('Message was malformed.')
-        sys.exit()
+        raise ValueError('Message was malformed.')
     return message
 
 
 def read_public_key(key_text):
+    """
+    Reads a FinCrypt public key. Returns a dictionary of all public key values.
+    Raises exception if key is malformed or unreadable.
+
+    The ASN.1 specification for a FinCrypt public key resides in key_asn1.py
+
+    :param key_text: Key text (string)
+    :return: Dictionary of all key ASN.1 values
+    """
+
     key_header, key_text = strip_headers(key_text)
 
     if key_header is None or key_header != 'BEGIN FINCRYPT PUBLIC KEY':
-        raise Exception
+        raise ValueError
 
-    try:
-        b64_decoded = base64.urlsafe_b64decode(key_text.encode('utf-8'))
-        key, _ = decode_ber(b64_decoded, asn1Spec=FinCryptPublicKey())
-        key = encode_native(key)
-    except:
-        raise Exception
+    b64_decoded = base64.urlsafe_b64decode(key_text.encode('utf-8'))
+    key, _ = decode_ber(b64_decoded, asn1Spec=FinCryptPublicKey())
+    key = encode_native(key)
 
     return {'keysize': key['keysize'], 'modulus': key['modulus'], 'exponent':
-        key['exponent'], 'sigModulus': key['sigModulus'], 'sigExponent':
-                key['sigExponent'], 'name': key['name'], 'email': key['email']}
+            key['exponent'], 'sigModulus': key['sigModulus'], 'sigExponent':
+            key['sigExponent'], 'name': key['name'], 'email': key['email']}
 
 
 def read_private_key(key_text):
+    """
+    Reads a FinCrypt private key. Returns a dictionary of all usable private key values.
+    Raises an exception if key is malformed or unreadable.
+
+    The ASN.1 specification for a FinCrypt private key resides in key_asn1.py
+
+    :param key_text: Key text (string)
+    :return: Dictionary of all key ASN.1 values except for primes P and Q
+    """
+
     key_header, key_text = strip_headers(key_text)
 
     if key_header is None or key_header != 'BEGIN FINCRYPT PRIVATE KEY':
-        raise Exception
+        raise ValueError
 
-    try:
-        b64_decoded = base64.urlsafe_b64decode(key_text.encode('utf-8'))
-        key, _ = decode_ber(b64_decoded, asn1Spec=FinCryptPrivateKey())
-        key = encode_native(key)
-    except:
-        raise Exception
+    b64_decoded = base64.urlsafe_b64decode(key_text.encode('utf-8'))
+    key, _ = decode_ber(b64_decoded, asn1Spec=FinCryptPrivateKey())
+    key = encode_native(key)
 
     return {'keysize': key['keysize'], 'modulus': key['modulus'], 'publicExponent':
-        key['publicExponent'], 'privateExponent': key['privateExponent'],
+            key['publicExponent'], 'privateExponent': key['privateExponent'],
             'sigModulus': key['sigModulus'], 'sigPublicExponent': key['sigPublicExponent'],
             'sigPrivateExponent': key['sigPrivateExponent'], 'name': key['name'], 'email': key['email']}
 
 
 def encrypt_and_sign(message, recipient):
+    """
+    Encrypts and signs a message using a recipient's public key name
+    Looks for the recipient's public key in the public_keys/ directory.
+    Looks for your private key as private_key/private.asc
+
+    The ASN.1 specification for a FinCrypt message resides in message_asn1.py
+
+    Raises exceptions if key files are not found, or are malformed.
+
+    :param message: Message to encrypt (bytes)
+    :param recipient: Recipient's public key filename (string)
+    :return: Bytes of encrypted and encoded message and signature.
+    """
+
     recipient_key = os.path.join(PUBLIC_PATH, recipient)
 
     if not os.path.exists(recipient_key):
-        print('Recipient keyfile does not exist.')
-        sys.exit()
+        raise FileNotFoundError('Recipient keyfile does not exist.')
+
+    if not os.path.exists(PRIVATE_KEY):
+        raise FileNotFoundError('Private keyfile does not exist.')
 
     try:
         with open(recipient_key) as f:
             recipient_key = read_public_key(f.read())
-    except:
-        sys.stderr.write('Recipient\'s key file is malformed.')
-        sys.exit()
+    except Exception:
+        raise FinCryptDecodingError('Recipient keyfile was malformed.')
 
     try:
         with open(PRIVATE_KEY) as f:
             signer_key = read_private_key(f.read())
-    except:
-        sys.stderr.write('Private key file is malformed or does not exist.')
-        sys.exit()
+    except Exception:
+        raise FinCryptDecodingError('Private key file is malformed.')
 
     encrypted_key, encrypted_iv, encrypted_blocks = encrypt_message(recipient_key['modulus'], recipient_key['exponent'],
                                                                     message,
@@ -212,48 +354,77 @@ def encrypt_and_sign(message, recipient):
 
 
 def decrypt_and_verify(message, sender):
+    """
+    Decrypts and verifies a message using a sender's public key name
+    Looks for the sender's public key in the public_keys/ directory.
+    Looks for your private key as private_key/private.asc
+
+    The ASN.1 specification for a FinCrypt message resides in message_asn1.py
+
+    Raises exceptions if key files are not found, or are malformed.
+
+    :param message: Message to decrypt (bytes)
+    :param sender: Sender's public key filename (string)
+    :return: Tuple (decrypted message (bytes), whether the message was verified (boolean))
+    If message was unable to be decrypted, the tuple will be (None, False)
+    """
+
     sender_key = os.path.join(PUBLIC_PATH, sender)
 
     if not os.path.exists(sender_key):
-        print('Sender keyfile does not exist.')
-        sys.exit()
+        raise FileNotFoundError('Sender keyfile does not exist.')
+
+    if not os.path.exists(PRIVATE_KEY):
+        raise FileNotFoundError('Private keyfile does not exist.')
 
     try:
         with open(PRIVATE_KEY) as f:
             decryption_key = read_private_key(f.read())
-    except:
-        sys.stderr.write('Private key file is malformed or does not exist.')
+    except Exception:
+        raise FinCryptDecodingError('Private key file is malformed or does not exist.')
 
     try:
         with open(sender_key) as f:
             sender_key = read_public_key(f.read())
-    except:
-        sys.stderr.write('Sender key file is malformed.')
+    except Exception:
+        raise FinCryptDecodingError('Sender key file is malformed.')
 
     try:
         decoded, _ = decode_ber(message, asn1Spec=FinCryptMessage())
         decoded = encode_native(decoded)
-    except:
+    except Exception:
         return None, False
 
     try:
         decrypted_message = decrypt_message(decryption_key['modulus'], decryption_key['privateExponent'],
                                             decoded['key'], decoded['iv'],
                                             decoded['message'])
-    except:
+    except Exception:
         decrypted_message = None
 
     try:
         authenticated = authenticate_message(sender_key['sigModulus'], sender_key['sigExponent'], decrypted_message,
                                              decoded['signature'])
-    except:
+    except Exception:
         authenticated = False
 
     return decrypted_message, authenticated
 
 
 def encrypt_text(arguments):
-    message = encrypt_and_sign(zlib.compress(arguments.infile.read()), arguments.recipient)
+    """
+    Encrypts a file object when given a argparser arguments object. Not intended for use as an import.
+    Outputs the resulting encrypted file as a FinCrypt message in plaintext.
+    Writes resulting encrypted message to stdout.
+
+    :param arguments: Argparser arguments object.
+    :return: None
+    """
+    try:
+        message = encrypt_and_sign(zlib.compress(arguments.infile.read()), arguments.recipient)
+    except Exception as e:
+        sys.stderr.write('%s\n' % e)
+        sys.exit()
 
     message = base64.b64encode(message).decode('utf-8')
 
@@ -263,18 +434,33 @@ def encrypt_text(arguments):
 
 
 def decrypt_text(arguments):
-    in_message = ''.join(read_message(arguments.infile.read()).split('\n'))
+    """
+    Decrypts a file object when given a argparser arguments object. Not intended for use as an import.
+    Reads the file object as a FinCrypt message in plaintext.
+    Writes resulting decrypted bytes to stdout.
 
-    in_message = base64.b64decode(in_message)
+    :param arguments: Argparser arguments object.
+    :return: None
+    """
 
-    message, verified = decrypt_and_verify(in_message, arguments.sender)
+    try:
+        in_message = read_message(arguments.infile.read())
+
+        in_message = ''.join(in_message.split('\n'))
+
+        in_message = base64.b64decode(in_message)
+
+        message, verified = decrypt_and_verify(in_message, arguments.sender)
+    except Exception as e:
+        sys.stderr.write('%s\n' % e)
+        sys.exit()
 
     if message is None:
         sys.stderr.write('Decryption failed.\n')
     else:
         try:
             sys.stdout.buffer.write(zlib.decompress(message))
-        except:
+        except Exception:
             sys.stderr.write('Decompression failed.\n')
 
     if not verified:
@@ -282,22 +468,48 @@ def decrypt_text(arguments):
 
 
 def encrypt_binary(arguments):
-    message = encrypt_and_sign(zlib.compress(arguments.infile.read()), arguments.recipient)
+    """
+    Encrypts a file object when given a argparser arguments object. Not intended for use as an import.
+    Outputs the resulting encrypted file as a FinCrypt message in binary encoding.
+    Writes resulting encrypted message to stdout.
+
+    :param arguments: Argparser arguments object.
+    :return: None
+    """
+
+    try:
+        message = encrypt_and_sign(zlib.compress(arguments.infile.read()), arguments.recipient)
+    except Exception as e:
+        sys.stderr.write('%s\n' % e)
+        sys.exit()
+
 
     sys.stdout.buffer.write(message)
 
 
 def decrypt_binary(arguments):
-    in_message = arguments.infile.read()
+    """
+    Decrypts a file object when given a argparser arguments object. Not intended for use as an import.
+    Reads the file object as a FinCrypt message in binary encoding.
+    Writes resulting decrypted bytes to stdout.
 
-    message, verified = decrypt_and_verify(in_message, arguments.sender)
+    :param arguments: Argparser arguments object
+    :return: None
+    """
+
+    in_message = arguments.infile.read()
+    try:
+        message, verified = decrypt_and_verify(in_message, arguments.sender)
+    except Exception as e:
+        sys.stderr.write('%s\n' % e)
+        sys.exit()
 
     if message is None:
         sys.stderr.write('Decryption failed.\n')
     else:
         try:
             sys.stdout.buffer.write(zlib.decompress(message))
-        except:
+        except Exception:
             sys.stderr.write('Decompression failed.\n')
 
     if not verified:
@@ -305,6 +517,19 @@ def decrypt_binary(arguments):
 
 
 def enum_keys(arguments):
+    """
+    Enumerates all keys residing in the public_keys directory.
+    Prints to stdout a formatted explanation of the key, with:
+    Filename
+    User Name
+    Email
+    Hash
+    Randomart
+
+    :param arguments: Argparser arguments object
+    :return: None
+    """
+
     key_enum = ''
     for key_file in os.listdir(PUBLIC_PATH):
         with open(os.path.join(PUBLIC_PATH, key_file)) as f:
@@ -315,10 +540,11 @@ def enum_keys(arguments):
         key_hash = sha.SHA512(key_text.encode('utf-8')).hexdigest()
         key_hash_formatted = ':'.join([key_hash[i:i + 2] for i in range(0, len(key_hash), 2)]).upper()
 
-        key_randomart = randomart.randomart(key_hash, 'SHA512')
+        # Only use the first 64 characters of the hash so it fills up less of the board.
+        key_randomart = randomart.randomart(key_hash[:64], 'SHA512')
 
-        formatted_key = f"{key_file}:\nName: {key['name'].decode('utf-8')}\nEmail: {key['email'].decode('utf-8')}\nHash: " \
-                        f"{key_hash_formatted}\nKeyArt:\n{key_randomart}"
+        formatted_key = f"{key_file}:\nName: {key['name'].decode('utf-8')}\nEmail: {key['email'].decode('utf-8')}" \
+                        f"\nHash: {key_hash_formatted}\nKeyArt:\n{key_randomart}"
 
         key_enum += formatted_key + '\n\n'
 
@@ -326,6 +552,12 @@ def enum_keys(arguments):
 
 
 def main():
+    """
+    Parses command line arguments.
+    Try fincrypt.py -h for help with arguments.
+
+    :return: None
+    """
     parser = argparse.ArgumentParser(
         description='Encrypt and decrypt using FinCrypt. Place your private key as '
                     './private_key/private.asc, and distribute your public key.')
