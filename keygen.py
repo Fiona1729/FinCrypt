@@ -4,7 +4,7 @@ import os
 import string
 import base64
 from pyasn1.codec.der.encoder import encode
-from key_asn1 import FinCryptPublicKey, FinCryptPrivateKey
+from asn1spec import FinCryptPublicKey, FinCryptPrivateKey
 
 BASE64_LITERALS = string.ascii_uppercase + string.ascii_lowercase + string.digits + '+='
 
