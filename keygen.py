@@ -1,12 +1,12 @@
+#!/usr/bin/env python3
+
 import random
 import sys
 import os
-import string
 import base64
 from pyasn1.codec.der.encoder import encode
 from asn1spec import FinCryptPublicKey, FinCryptPrivateKey
 
-BASE64_LITERALS = string.ascii_uppercase + string.ascii_lowercase + string.digits + '+='
 
 sysrandom = random.SystemRandom()
 
