@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 
-import resin
+import sha
 import sys
 import os
 import argparse
@@ -13,7 +13,7 @@ from message_asn1 import FinCryptMessage
 from pyasn1.codec.ber.decoder import decode as decode_ber
 from pyasn1.codec.native.encoder import encode as encode_native
 from pyasn1.codec.der.encoder import encode as encode_der
-from block import Decrypter, Encrypter, AESModeOfOperationCBC
+from aes import Decrypter, Encrypter, AESModeOfOperationCBC
 
 BASE_PATH = os.path.dirname(__file__)
 PUBLIC_PATH = os.path.join(BASE_PATH, 'public_keys')
@@ -101,7 +101,7 @@ def sign_message(n, e, message, key_size):
 
     block_size = key_size // 8
 
-    message_hash = resin.SHA512(message).digest()
+    message_hash = sha.SHA512(message).digest()
 
     for block in get_blocks(message_hash, block_size):
         encrypted_blocks.append(encrypt_number(n, e, block))
@@ -116,7 +116,7 @@ def authenticate_message(n, d, plaintext, encrypted_blocks):
         decrypted_blocks.append(decrypt_number(n, d, block))
 
     alleged_hash = get_text(decrypted_blocks)
-    return alleged_hash == resin.SHA512(plaintext).digest()
+    return alleged_hash == sha.SHA512(plaintext).digest()
 
 
 def strip_headers(pem_text):
@@ -312,7 +312,7 @@ def enum_keys(arguments):
 
         key = read_public_key(key_text)
 
-        key_hash = resin.SHA512(key_text.encode('utf-8')).hexdigest()
+        key_hash = sha.SHA512(key_text.encode('utf-8')).hexdigest()
         key_hash_formatted = ':'.join([key_hash[i:i + 2] for i in range(0, len(key_hash), 2)]).upper()
 
         key_randomart = randomart.randomart(key_hash, 'SHA512')
