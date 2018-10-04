@@ -8,8 +8,7 @@ import base64
 import zlib
 import randomart
 import re
-from key_asn1 import FinCryptPublicKey, FinCryptPrivateKey
-from message_asn1 import FinCryptMessage
+from asn1spec import FinCryptPublicKey, FinCryptPrivateKey, FinCryptMessage
 from pyasn1.codec.ber.decoder import decode as decode_ber
 from pyasn1.codec.native.encoder import encode as encode_native
 from pyasn1.codec.der.encoder import encode as encode_der
@@ -255,7 +254,7 @@ def read_public_key(key_text):
     Reads a FinCrypt public key. Returns a dictionary of all public key values.
     Raises exception if key is malformed or unreadable.
 
-    The ASN.1 specification for a FinCrypt public key resides in key_asn1.py
+    The ASN.1 specification for a FinCrypt public key resides in asn1spec.py
 
     :param key_text: Key text (string)
     :return: Dictionary of all key ASN.1 values
@@ -280,7 +279,7 @@ def read_private_key(key_text):
     Reads a FinCrypt private key. Returns a dictionary of all usable private key values.
     Raises an exception if key is malformed or unreadable.
 
-    The ASN.1 specification for a FinCrypt private key resides in key_asn1.py
+    The ASN.1 specification for a FinCrypt private key resides in asn1spec.py
 
     :param key_text: Key text (string)
     :return: Dictionary of all key ASN.1 values except for primes P and Q
@@ -307,7 +306,7 @@ def encrypt_and_sign(message, recipient):
     Looks for the recipient's public key in the public_keys/ directory.
     Looks for your private key as private_key/private.asc
 
-    The ASN.1 specification for a FinCrypt message resides in message_asn1.py
+    The ASN.1 specification for a FinCrypt message resides in asn1spec.py
 
     Raises exceptions if key files are not found, or are malformed.
 
@@ -359,7 +358,7 @@ def decrypt_and_verify(message, sender):
     Looks for the sender's public key in the public_keys/ directory.
     Looks for your private key as private_key/private.asc
 
-    The ASN.1 specification for a FinCrypt message resides in message_asn1.py
+    The ASN.1 specification for a FinCrypt message resides in asn1spec.py
 
     Raises exceptions if key files are not found, or are malformed.
 
