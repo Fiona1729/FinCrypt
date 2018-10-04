@@ -420,7 +420,7 @@ def encrypt_text(arguments):
     :return: None
     """
     try:
-        message = encrypt_and_sign(zlib.compress(arguments.infile.read()), arguments.recipient)
+        message = encrypt_and_sign(zlib.compress(arguments.infile.read(), level=9), arguments.recipient)
     except Exception as e:
         sys.stderr.write('%s\n' % e)
         sys.exit()
@@ -477,7 +477,7 @@ def encrypt_binary(arguments):
     """
 
     try:
-        message = encrypt_and_sign(zlib.compress(arguments.infile.read()), arguments.recipient)
+        message = encrypt_and_sign(zlib.compress(arguments.infile.read(), level=9), arguments.recipient)
     except Exception as e:
         sys.stderr.write('%s\n' % e)
         sys.exit()

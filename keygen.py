@@ -8,6 +8,8 @@ from asn1spec import FinCryptPublicKey, FinCryptPrivateKey
 
 BASE64_LITERALS = string.ascii_uppercase + string.ascii_lowercase + string.digits + '+='
 
+sysrandom = random.SystemRandom()
+
 
 def gcd(a, b):
     """
@@ -58,7 +60,7 @@ def rabin_miller(p):
     while s % 2 == 0:
         s >>= 1
     for x in range(10):
-        a = random.randrange(p - 1) + 1
+        a = sysrandom.randrange(p - 1) + 1
         t = s
         m = pow(a, t, p)
         while t != p - 1 and m != 1 and m != p - 1:
@@ -109,7 +111,7 @@ def gen_prime(prime_size=4096):
     """
 
     while True:
-        num = random.randrange(2 ** (prime_size - 1), 2 ** (prime_size))
+        num = sysrandom.randrange(2 ** (prime_size - 1), 2 ** (prime_size))
         if prime(num):
             return num
 
