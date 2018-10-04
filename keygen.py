@@ -81,7 +81,7 @@ def prime(p):
     :return: Whether p is prime
     """
 
-    if (p < 2):
+    if p < 2:
         return False
 
     primes = [2, 3, 5, 7, 11, 13, 17, 19, 23, 29, 31, 37, 41, 43, 47, 53, 59, 61, 67, 71, 73, 79, 83, 89, 97, 101, 103,
@@ -97,7 +97,7 @@ def prime(p):
         return True
 
     for prime in primes:
-        if (p % prime == 0):
+        if p % prime == 0:
             return False
 
     return rabin_miller(p)
@@ -112,7 +112,7 @@ def gen_prime(prime_size=4096):
     """
 
     while True:
-        num = sysrandom.randrange(2 ** (prime_size - 1), 2 ** (prime_size))
+        num = sysrandom.randrange(2 ** (prime_size - 1), 2 ** prime_size)
         if prime(num):
             return num
 
@@ -137,7 +137,7 @@ def gen_key(key_size):
     # This is encryption exponent
     print('Finding E that is coprime with PHI(p * q)')
     while True:
-        e = random.randrange(2 ** (key_size - 1), 2 ** (key_size))
+        e = random.randrange(2 ** (key_size - 1), 2 ** key_size)
         if gcd(e, (p - 1) * (q - 1)) == 1:
             break
 
