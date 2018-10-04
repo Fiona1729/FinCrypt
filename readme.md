@@ -7,7 +7,7 @@ FinCrypt is not designed to be a hardened cryptosystem! FinCrypt doesn't use sec
 FinCrypt simply provides a simple showcase of a hybrid cryptosystem with signatures, and attempts to make all the workings of the cryptographic components easily dissectable.  
 Additionally, FinCrypt does not provide any methods of PKI other than hash validation and a simple SSH-style randomart visualization.
 
-## Examples:  
+## Usage
 ```crypto.py e {public key name} {file to encrypt} > encrypted_message.txt```  
  To encrypt a message.
   
