@@ -53,11 +53,6 @@ def egcd(a, b):
 
 
 def primes(n):
-    """
-
-    :param n:
-    :return:
-    """
     primfac = []
     multiple = False
     d = 2
