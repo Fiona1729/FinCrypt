@@ -8,16 +8,19 @@ import base64
 import zlib
 import randomart
 import re
+import ecc
 from asn1spec import FinCryptPublicKey, FinCryptPrivateKey, FinCryptMessage
 from pyasn1.codec.ber.decoder import decode as decode_ber
 from pyasn1.codec.native.encoder import encode as encode_native
 from pyasn1.codec.der.encoder import encode as encode_der
 from aes import Decrypter, Encrypter, AESModeOfOperationCBC
 
+
 BASE_PATH = os.path.dirname(__file__)
 PUBLIC_PATH = os.path.join(BASE_PATH, 'public_keys')
 PRIVATE_KEY = os.path.join(BASE_PATH, 'private_key', 'private.asc')
 
+_flatten = lambda l: [item for sublist in l for item in sublist]
 
 class FinCryptDecodingError(Exception):
     def __init__(self, *args, **kwargs):
@@ -65,39 +68,40 @@ def get_bytes(block_nums):
     return b''.join(message)
 
 
-def encrypt_number(n, e, num):
+def encrypt_number(kx, ky, num):
     """
-    Encrypts a number using the RSA cipher
-    NOTE:
-    Just the pow function with renamed arguments. Used for better code readability.
+    Encrypts a number using the ECC curve.
 
-    :param n: Encryption modulus (int)
-    :param e: Encryption exponent (int)
-    :param num: Number to encrypt (int)
-    :return: Encrypted value (int)
+    :param kx: The x value of the public key's point (int)
+    :param ky: The y value of the public key's point (int)
+    :param num: The number to encrypt (int)
+    :return: Tuple (c1 (int), c2 (ecc.Point))
     """
 
-    return pow(num, e, n)
+    el_gamal = ecc.ElGamal(ecc.CURVE)
 
+    encrypted =  el_gamal.encrypt(ecc.Point(ecc.CURVE, kx, ky), num)
 
-def decrypt_number(n, d, num):
+    return encrypted[0], encrypted[1].x, encrypted[1].y
+
+def decrypt_number(k, c1, c2_x, c2_y):
     """
-    Decrypts a number using the RSA cipher
-    NOTE:
-    Just the pow function with renamed arguments. Used for better code readability.
+    Decrypts a number using the ECC curve.
 
-    :param n: Decryption modulus (int)
-    :param d: Decryption exponent (int)
-    :param num: Number to Decrypt (int)
+    :param k: The private key (int)
+    :param c1: The c1 of the encrypted message (int)
+    :param c2_x: The x value of c2 (int)
+    :param c2_y: The y value of c2 (int)
     :return: Original number (int)
     """
 
-    return pow(num, d, n)
+    el_gamal = ecc.ElGamal(ecc.CURVE)
+    return el_gamal.decrypt(k, c1, ecc.Point(ecc.CURVE, c2_x, c2_y))
 
 
-def encrypt_message(n, e, message, key_size):
+def encrypt_message(kx, ky, message):
     """
-    Encrypts a message using RSA and AES-256
+    Encrypts a message using ECC and AES-256
     First generates a random AES key and IV with os.urandom()
     Then encrypts the original message with that key
     Then encrypts the AES key with the RSA key
@@ -106,11 +110,11 @@ def encrypt_message(n, e, message, key_size):
     This means that plaintext will not have the same ciphertext
     when encrypted twice. Keep this in mind if you require reproducibility behavior
 
-    :param n: Encryption modulus (int)
-    :param e: Encryption exponent (int)
+    :param kx: Public key kx (int)
+    :param ky: Public key ky (int)
     :param message: Message (bytes)
-    :param key_size: The keysize, in bits, of the RSA public key (int)
-    :return: Tuple (encrypted key (list of ints), encrypted IV (list of ints), and encrypted message (bytes))
+    :return: Tuple (encrypted key (list of ints), encrypted IV (list of ints),
+    and encrypted message (bytes))
     """
 
     encrypted_key = []
@@ -119,7 +123,7 @@ def encrypt_message(n, e, message, key_size):
     key = os.urandom(32)
     iv = os.urandom(16)
 
-    block_size = key_size // 8
+    block_size = 256
 
     message_encryptor = Encrypter(mode=AESModeOfOperationCBC(key=key, iv=iv))
 
@@ -128,24 +132,27 @@ def encrypt_message(n, e, message, key_size):
     encrypted_blocks += message_encryptor.feed()
 
     for block in get_blocks(key, block_size):
-        encrypted_key.append(encrypt_number(n, e, block))
+        encrypted_key.append(encrypt_number(kx, ky, block))
 
     for block in get_blocks(iv, block_size):
-        encrypted_iv.append(encrypt_number(n, e, block))
+        encrypted_iv.append(encrypt_number(kx, ky, block))
+
+    encrypted_key = _flatten(encrypted_key)
+
+    encrypted_iv = _flatten(encrypted_iv)
 
     return encrypted_key, encrypted_iv, encrypted_blocks
 
 
-def decrypt_message(n, d, encrypted_key, encrypted_iv, encrypted_message):
+def decrypt_message(k, encrypted_key, encrypted_iv, encrypted_message):
     """
     Decrypts a message encrypted by the encrypt_message function
-    First decrypts the AES key and IV using RSA
+    First decrypts the AES key and IV using ECC
     Then decrypts the data using the AES key and IV
 
-    :param n: Decryption modulus (int)
-    :param d: Decryption exponent (int)
-    :param encrypted_key: RSA encrypted key (list of ints)
-    :param encrypted_iv: RSA encrypted IV (list of ints)
+    :param k: Private key k
+    :param encrypted_key: ECC encrypted key (list of of ints)
+    :param encrypted_iv: ECC encrypted IV (list of ints)
     :param encrypted_message: AES encrypted data (bytes
     :return: Decrypted data (bytes)
     """
@@ -153,12 +160,16 @@ def decrypt_message(n, d, encrypted_key, encrypted_iv, encrypted_message):
     decrypted_key = []
     decrypted_iv = []
 
+    encrypted_key = [encrypted_key[i:i + 3] for i in range(0, len(encrypted_key), 3)]
+
+    encrypted_iv = [encrypted_iv[i:i + 3] for i in range(0, len(encrypted_iv), 3)]
+
     for block in encrypted_key:
-        decrypted_key.append(decrypt_number(n, d, block))
+        decrypted_key.append(decrypt_number(k, *block))
     decrypted_key = get_bytes(decrypted_key)
 
     for block in encrypted_iv:
-        decrypted_iv.append(decrypt_number(n, d, block))
+        decrypted_iv.append(decrypt_number(k, *block))
     decrypted_iv = get_bytes(decrypted_iv)
 
     message_decryptor = Decrypter(mode=AESModeOfOperationCBC(decrypted_key, iv=decrypted_iv))
@@ -169,41 +180,40 @@ def decrypt_message(n, d, encrypted_key, encrypted_iv, encrypted_message):
     return decrypted_message
 
 
-def sign_message(n, e, message, key_size):
+def sign_message(kx, ky, message):
     """
     Signs a message using an RSA signature private key (n and e), a message,
-    and keysize
 
     Computes SHA512 hash of plaintext, and then encrypts it with private key
 
-    :param n: Encryption modulus (int)
-    :param e: Encryption exponent (int)
+    :param kx: ECC key kx
+    :param ky: ECC key ky
     :param message: Message to sign (bytes)
-    :param key_size: Key size in bits (int)
     :return: Signature (list of ints)
     """
 
     encrypted_blocks = []
 
-    block_size = key_size // 8
+    block_size = 256
 
     message_hash = sha.SHA512(message).digest()
 
     for block in get_blocks(message_hash, block_size):
-        encrypted_blocks.append(encrypt_number(n, e, block))
+        encrypted_blocks.append(encrypt_number(kx, ky, block))
+
+    encrypted_blocks = _flatten(encrypted_blocks)
 
     return encrypted_blocks
 
 
-def authenticate_message(n, d, plaintext, encrypted_blocks):
+def authenticate_message(k, plaintext, encrypted_blocks):
     """
     Authenticates a message when given a plaintext and signature
 
     Decrypts hash with public key, and compares alleged hash with actual
     hash of plaintext.
 
-    :param n: Decryption modulus (int)
-    :param d: Decryption exponent (int)
+    :param k: ECC key K
     :param plaintext: Decrypted plaintext to verify (bytes)
     :param encrypted_blocks: The signature (list of ints)
     :return: Whether the message signature is valid (boolean)
@@ -211,8 +221,10 @@ def authenticate_message(n, d, plaintext, encrypted_blocks):
 
     decrypted_blocks = []
 
+    encrypted_blocks = [encrypted_blocks[i:i + 3] for i in range(0, len(encrypted_blocks), 3)]
+
     for block in encrypted_blocks:
-        decrypted_blocks.append(decrypt_number(n, d, block))
+        decrypted_blocks.append(decrypt_number(k, *block))
 
     alleged_hash = get_bytes(decrypted_blocks)
     return alleged_hash == sha.SHA512(plaintext).digest()
@@ -269,9 +281,8 @@ def read_public_key(key_text):
     key, _ = decode_ber(b64_decoded, asn1Spec=FinCryptPublicKey())
     key = encode_native(key)
 
-    return {'keysize': key['keysize'], 'modulus': key['modulus'], 'exponent':
-            key['exponent'], 'sigModulus': key['sigModulus'], 'sigExponent':
-            key['sigExponent'], 'name': key['name'], 'email': key['email']}
+    return {'kx': key['kx'], 'ky': key['ky'], 'sigk': key['sigk'],
+            'name': key['name'], 'email': key['email']}
 
 
 def read_private_key(key_text):
@@ -294,10 +305,8 @@ def read_private_key(key_text):
     key, _ = decode_ber(b64_decoded, asn1Spec=FinCryptPrivateKey())
     key = encode_native(key)
 
-    return {'keysize': key['keysize'], 'modulus': key['modulus'], 'publicExponent':
-            key['publicExponent'], 'privateExponent': key['privateExponent'],
-            'sigModulus': key['sigModulus'], 'sigPublicExponent': key['sigPublicExponent'],
-            'sigPrivateExponent': key['sigPrivateExponent'], 'name': key['name'], 'email': key['email']}
+    return {'k': key['k'], 'sigkx': key['sigkx'], 'sigky': key['sigky'],
+            'name': key['name'], 'email': key['email']}
 
 
 def encrypt_and_sign(message, recipient):
@@ -335,16 +344,15 @@ def encrypt_and_sign(message, recipient):
     except Exception:
         raise FinCryptDecodingError('Private key file is malformed.')
 
-    encrypted_key, encrypted_iv, encrypted_blocks = encrypt_message(recipient_key['modulus'], recipient_key['exponent'],
-                                                                    message,
-                                                                    recipient_key['keysize'])
-    signature = sign_message(signer_key['sigModulus'], signer_key['sigPrivateExponent'], message, signer_key['keysize'])
+    encrypted_key, encrypted_iv, encrypted_blocks = encrypt_message(recipient_key['kx'], recipient_key['ky'],
+                                                                    message)
+    signature = sign_message(signer_key['sigkx'], signer_key['sigky'], message)
 
     encrypted_message = FinCryptMessage()
 
+    encrypted_message['message'] = encrypted_blocks
     encrypted_message['key'].extend(encrypted_key)
     encrypted_message['iv'].extend(encrypted_iv)
-    encrypted_message['message'] = encrypted_blocks
     encrypted_message['signature'].extend(signature)
 
     encoded_message = encode_der(encrypted_message)
@@ -395,14 +403,14 @@ def decrypt_and_verify(message, sender):
         return None, False
 
     try:
-        decrypted_message = decrypt_message(decryption_key['modulus'], decryption_key['privateExponent'],
+        decrypted_message = decrypt_message(decryption_key['k'],
                                             decoded['key'], decoded['iv'],
                                             decoded['message'])
     except Exception:
         decrypted_message = None
 
     try:
-        authenticated = authenticate_message(sender_key['sigModulus'], sender_key['sigExponent'], decrypted_message,
+        authenticated = authenticate_message(sender_key['sigk'], decrypted_message,
                                              decoded['signature'])
     except Exception:
         authenticated = False
