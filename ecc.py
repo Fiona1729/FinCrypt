@@ -664,8 +664,6 @@ class ElGamal:
         return c2 + self.curve.point_conjugate(c1 * private_key.scalar)
 
 
-
-
 CURVE = TwistedEdwardsCurve(a=1,
                             d=-376014,
                             p=0x1ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff,
