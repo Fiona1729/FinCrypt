@@ -14,7 +14,7 @@ def egcd(a, b):
         pass
     return s0, t0, a
 
-class FieldElement(object):
+class FieldElement:
     """Represents an element in a finite field over a (prime) modulus."""
 
     def __init__(self, intvalue, modulus):
@@ -92,7 +92,7 @@ class FieldElement(object):
             z = FieldElement(random.randint(1, self.modulus - 1), self.modulus)
             if z.is_qnr:
                 break
-        assert (z.is_qnr)
+        assert z.is_qnr
         c = z ** q
 
         r = self ** ((q + 1) // 2)
@@ -130,9 +130,9 @@ class FieldElement(object):
             root = self._tonelli_shanks_sqrt()
 
         if (int(root) & 1) == 0:
-            return (root, -root)
+            return root, -root
         else:
-            return (-root, root)
+            return -root, root
 
     def quartic_root(self):
         """Returns the quartic root of the value or None if no such value
@@ -172,7 +172,7 @@ class FieldElement(object):
             candidate = cls(random.randint(2, modulus - 1), modulus)
             if candidate.is_qnr:
                 return candidate
-        raise Exception("Could not find a QNR in F_%d with a reasonable amount of tries." % (modulus))
+        raise Exception("Could not find a QNR in F_%d with a reasonable amount of tries." % modulus)
 
     def __int__(self):
         return self._intvalue
@@ -313,7 +313,7 @@ class AffineCurvePoint:
         n = self
         if scalar > 0:
             for bit in range(scalar.bit_length()):
-                if (scalar & (1 << bit)):
+                if scalar & (1 << bit):
                     result = result + n
                 n = n + n
         assert (result.on_curve())
@@ -348,22 +348,22 @@ class AffineCurvePoint:
             return "(0x%x, 0x%x)" % (int(self.x), int(self.y))
 
 
-class EllipticCurve(object):
+class EllipticCurve:
     """Elliptic curve base class. Provides functionality which all curves have
     in common."""
 
-    def __init__(self, p, n, h, Gx, Gy, **kwargs):
+    def __init__(self, p, n, h, gx, gy, **kwargs):
         assert (isinstance(p, int))  # Modulus
         assert ((n is None) or isinstance(n, int))  # Order
         assert ((h is None) or isinstance(h, int))  # Cofactor
-        assert ((Gx is None) or isinstance(Gx, int))  # Generator Point X
-        assert ((Gy is None) or isinstance(Gy, int))  # Generator Point Y
-        assert ((Gx is None) == (Gy is None))  # Either both X and Y of G are set or none
+        assert ((gx is None) or isinstance(gx, int))  # Generator Point X
+        assert ((gy is None) or isinstance(gy, int))  # Generator Point Y
+        assert ((gx is None) == (gy is None))  # Either both X and Y of g are set or none
         self._p = p
         self._n = n
         self._h = h
-        if (Gx is not None) and (Gy is not None):
-            self._G = AffineCurvePoint(Gx, Gy, self)
+        if (gx is not None) and (gy is not None):
+            self._G = AffineCurvePoint(gx, gy, self)
         else:
             self._G = None
 
@@ -372,10 +372,12 @@ class EllipticCurve(object):
         else:
             self._quirks = {}
 
-    @property
-    def domainparams(self):
-        return _TwistedEdwardsCurveDomainParameters(curvetype=self.curvetype, a=self.a, d=self.d, p=self.p, n=self.n,
-                                                    G=self.G)
+        if kwargs.get('name') is not None:
+            self._name = kwargs['name']
+        else:
+            self._name = None
+
+        self.pretty_name = None
 
     @property
     def p(self):
@@ -386,7 +388,7 @@ class EllipticCurve(object):
     @property
     def n(self):
         """Returns the order of the subgroup that is created by the generator
-        G."""
+        g."""
         return self._n
 
     @property
@@ -396,8 +398,8 @@ class EllipticCurve(object):
         return self._h
 
     @property
-    def G(self):
-        """Returns the generator point G of the curve or None if no such point
+    def g(self):
+        """Returns the generator point g of the curve or None if no such point
         was set. The generator point generates a subgroup over #E(F_p)."""
         return self._G
 
@@ -420,7 +422,7 @@ class EllipticCurve(object):
     @property
     def hasgenerator(self):
         """Returns if a generator point was supplied for the curve."""
-        return self.G is not None
+        return self.g is not None
 
     @property
     def hasname(self):
@@ -445,12 +447,12 @@ class EllipticCurve(object):
         """Returns a string that corresponds to the curve type. For example,
         this string can be 'shortweierstrass', 'twistededwards' or
         'montgomery'."""
-        raise Exception(NotImplemented)
+        raise NotImplementedError
 
     @property
     def domainparamdict(self):
         """Returns the domain parameters of the curve as a dictionary."""
-        return dict(self.domainparams._asdict())
+        return dict(self.domainparams)
 
     @property
     def security_bit_estimate(self):
@@ -459,6 +461,10 @@ class EllipticCurve(object):
         be less, for example for Koblitz curves some bits might be
         subtracted)."""
         return self.n.bit_length() // 2
+
+    @property
+    def domainparams(self):
+        raise NotImplementedError
 
     def enumerate_points(self):
         """Enumerates all points on the curve, including the point at infinity
@@ -470,26 +476,26 @@ class EllipticCurve(object):
         this will be the point at infinity)."""
         return AffineCurvePoint(None, None, self)
 
-    def is_neutral(self, P):
+    def is_neutral(self, p):
         """Checks if a given point P is the neutral element of the group."""
-        return P.x is None
+        return p.x is None
 
-    def on_curve(self, P):
+    def on_curve(self, p):
         """Checks is a given point P is on the curve."""
         raise NotImplementedError
 
-    def value_at(self):
+    def value_at(self, x):
         raise NotImplementedError
 
-    def point_addition(self, P, Q):
+    def point_addition(self, p, q):
         """Returns the sum of two points P and Q on the curve."""
         raise NotImplementedError
 
-    def point_conjugate(self, P):
+    def point_conjugate(self, p):
         """Returns the negated point -P to a given point P."""
         raise NotImplementedError
 
-    def compress(self, P):
+    def compress(self, p):
         """Returns the compressed representation of the point P on the
         curve. Not all curves may support this operation."""
         raise NotImplementedError
@@ -506,7 +512,7 @@ class EllipticCurve(object):
         return not (self == other)
 
 
-_TwistedEdwardsCurveDomainParameters = collections.namedtuple("TwistedEdwardsCurveDomainParameters", [ "curvetype", "a", "d", "p", "n", "G" ])
+_TwistedEdwardsCurveDomainParameters = collections.namedtuple("TwistedEdwardsCurveDomainParameters", [ "curvetype", "a", "d", "p", "n", "g" ])
 
 
 class TwistedEdwardsCurve(EllipticCurve):
@@ -514,12 +520,12 @@ class TwistedEdwardsCurve(EllipticCurve):
     Twisted Edwards equation a x^2 + y^2 = 1 + d x^2 y^2."""
     pretty_name = "Twisted Edwards"
 
-    def __init__(self, a, d, p, n, h, Gx, Gy, **kwargs):
+    def __init__(self, a, d, p, n, h, gx, gy, **kwargs):
         """Create an elliptic Twisted Edwards curve given the equation
         coefficients a and d, the curve field's modulus p, the order of the
-        curve n and the generator point G's X and Y coordinates in affine
+        curve n and the generator point g's X and Y coordinates in affine
         representation, Gx and Gy."""
-        EllipticCurve.__init__(self, p, n, h, Gx, Gy, **kwargs)
+        EllipticCurve.__init__(self, p, n, h, gx, gy, **kwargs)
         assert (isinstance(a, int))  # Curve coefficent A
         assert (isinstance(d, int))  # Curve coefficent D
         self._a = FieldElement(a, p)
@@ -530,11 +536,11 @@ class TwistedEdwardsCurve(EllipticCurve):
         assert (self.d * (1 - self.d) != 0)
 
         if self._G is not None:
-            # Check that the generator G is on the curve
+            # Check that the generator g is on the curve
             assert (self._G.on_curve())
 
-            # Check that the generator G is of curve order
-            assert ((self.n * self.G).is_neutral)
+            # Check that the generator g is of curve order
+            assert (self.n * self.g).is_neutral
 
     @property
     def curvetype(self):
@@ -553,7 +559,7 @@ class TwistedEdwardsCurve(EllipticCurve):
         return self._d
 
     @property
-    def B(self):
+    def b(self):
         """Returns the length of the curve's field modulus in bits plus one."""
         return self._p.bit_length() + 1
 
@@ -563,6 +569,10 @@ class TwistedEdwardsCurve(EllipticCurve):
         exactly when d is a quadratic non-residue modulo p."""
         return self.d.is_qnr
 
+    @property
+    def domainparams(self):
+        return _TwistedEdwardsCurveDomainParameters(curvetype=self.curvetype, a=self.a, d=self.d, p=self.p, n=self.n,
+                                                    g=self.g)
     def neutral(self):
         return AffineCurvePoint(0, 1, self)
 
@@ -572,23 +582,23 @@ class TwistedEdwardsCurve(EllipticCurve):
             return None
         return n[0] // (2 * (1 - self.d * x ** 2))
 
-    def is_neutral(self, P):
-        return (P.x == 0) and (P.y == 1)
+    def is_neutral(self, p):
+        return (p.x == 0) and (p.y == 1)
 
-    def on_curve(self, P):
-        return (self.a * P.x ** 2) + P.y ** 2 == 1 + self.d * P.x ** 2 * P.y ** 2
+    def on_curve(self, p):
+        return (self.a * p.x ** 2) + p.y ** 2 == 1 + self.d * p.x ** 2 * p.y ** 2
 
-    def point_conjugate(self, P):
-        return AffineCurvePoint(int(-P.x), int(P.y), self)
+    def point_conjugate(self, p):
+        return AffineCurvePoint(int(-p.x), int(p.y), self)
 
-    def point_addition(self, P, Q):
-        x = (P.x * Q.y + Q.x * P.y) // (1 + self.d * P.x * Q.x * P.y * Q.y)
-        y = (P.y * Q.y - self.a * P.x * Q.x) // (1 - self.d * P.x * Q.x * P.y * Q.y)
+    def point_addition(self, p, q):
+        x = (p.x * q.y + q.x * p.y) // (1 + self.d * p.x * q.x * p.y * q.y)
+        y = (p.y * q.y - self.a * p.x * q.x) // (1 - self.d * p.x * q.x * p.y * q.y)
         return AffineCurvePoint(int(x), int(y), self)
 
     def __str__(self):
         if self.hasname:
-            return "TwistedEdwardsCurve<%s>" % (self.name)
+            return "TwistedEdwardsCurve<%s>" % self.name
         else:
             return "TwistedEdwardsCurve<0x%x x^2 + y^2 = 1 + 0x%x x^2 y^2 mod 0x%x>" % (
                 int(self.a), int(self.d), int(self.p))
@@ -623,7 +633,7 @@ class ECPrivateKey:
         curve."""
         self._scalar = scalar
         self._curve = curve
-        self._pubkey = ECPublicKey(self._scalar * self._curve.G)
+        self._pubkey = ECPublicKey(self._scalar * self._curve.g)
 
     @property
     def scalar(self):
@@ -647,7 +657,7 @@ class ECPrivateKey:
         return ECPrivateKey(scalar, curve)
 
     def __str__(self):
-        return "PrivateKey<d = 0x%x>" % (self.scalar)
+        return "PrivateKey<d = 0x%x>" % self.scalar
 
 
 class ElGamal:
@@ -662,7 +672,7 @@ class ElGamal:
 
         r = random.randint(1, self.curve.n - self.curve.n // 2)
 
-        return self.curve.G * r, message + (public_key.point * r)
+        return self.curve.g * r, message + (public_key.point * r)
 
     def _decrypt_point(self, c1: AffineCurvePoint, c2: AffineCurvePoint, private_key: ECPrivateKey):
         assert self.curve.on_curve(c1) and self.curve.on_curve(c2)
@@ -700,19 +710,21 @@ class ElGamal:
 
         return int(decrypted.x) >> k
 
+
 class ECEIS:
     def __init__(self, curve: EllipticCurve):
         assert curve.hasgenerator
         self.curve = curve
 
     def exchange(self, public_key: ECPublicKey):
-        r = random.randint(1, self.curve.n - 1)
+        k = random.randint(1, self.curve.n - 1)
 
-        R = r * self.curve.G
-        S = r * public_key.point
+        r = k * self.curve.g
+        s = k * public_key.point
 
-        return R, S
+        return r, s
 
+    @staticmethod
     def recover(self, r, private_key: ECPrivateKey):
         return private_key.scalar * r
 
@@ -721,7 +733,7 @@ class ECDSA:
     def __init__(self, curve: EllipticCurve):
         assert curve.hasgenerator
         self.curve = curve
-        self.generator = self.curve.G
+        self.generator = self.curve.g
 
 
     def sign(self, hashval: int, private_key: ECPrivateKey):
@@ -752,7 +764,7 @@ class ECDSA:
         u1 = int(hashval * w)
         u2 = int(r * w)
 
-        pt = (u1 * self.curve.G) + (u2 * public_key.point)
+        pt = (u1 * self.curve.g) + (u2 * public_key.point)
 
         x1 = int(pt.x) % self.curve.n
 
@@ -764,5 +776,5 @@ CURVE = TwistedEdwardsCurve(a=1,
                             p=0x1ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff,
                             n=0x7ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffd15b6c64746fc85f736b8af5e7ec53f04fbd8c4569a8f1f4540ea2435f5180d6b,
                             h=4,
-                            Gx=0x752cb45c48648b189df90cb2296b2878a3bfd9f42fc6c818ec8bf3c9c0c6203913f6ecc5ccc72434b1ae949d568fc99c6059d0fb13364838aa302a940a2f19ba6c,
-                            Gy=12)
+                            gx=0x752cb45c48648b189df90cb2296b2878a3bfd9f42fc6c818ec8bf3c9c0c6203913f6ecc5ccc72434b1ae949d568fc99c6059d0fb13364838aa302a940a2f19ba6c,
+                            gy=12)
