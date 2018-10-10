@@ -716,6 +716,7 @@ class ECEIS:
     def recover(self, r, private_key: ECPrivateKey):
         return private_key.scalar * r
 
+        
 class ECDSA:
     def __init__(self, curve: EllipticCurve):
         assert curve.hasgenerator
