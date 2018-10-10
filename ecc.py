@@ -1,5 +1,6 @@
 import math
 import collections
+import sha
 from random import SystemRandom
 random = SystemRandom()
 
@@ -699,6 +700,21 @@ class ElGamal:
 
         return int(decrypted.x) >> k
 
+class ECEIS:
+    def __init__(self, curve: EllipticCurve):
+        assert curve.hasgenerator
+        self.curve = curve
+
+    def exchange(self, public_key: ECPublicKey):
+        r = random.randint(1, self.curve.n - 1)
+
+        R = r * self.curve.G
+        S = r * public_key.point
+
+        return R, S
+
+    def recover(self, r, private_key: ECPrivateKey):
+        return private_key.scalar * r
 
 class ECDSA:
     def __init__(self, curve: EllipticCurve):
