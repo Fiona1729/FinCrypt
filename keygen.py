@@ -36,23 +36,19 @@ def gen_key_files(pub_name, priv_name, *, key_name, key_email):
         print('Key files already exist!')
         sys.exit()
 
-    el_gamal = ecc.ElGamal(ecc.CURVE)
+    private = ecc.ECPrivateKey.generate(ecc.CURVE)
 
-    public, private = el_gamal.keygen()
-    sig_public, sig_private = el_gamal.keygen()
+    public = private.pubkey
 
     pub_key = FinCryptPublicKey()
     priv_key = FinCryptPrivateKey()
 
-    pub_key['kx'] = public.x
-    pub_key['ky'] = public.y
-    pub_key['sigk'] = sig_private
+    pub_key['kx'] = public.point.x
+    pub_key['ky'] = public.point.y
     pub_key['name'] = key_name
     pub_key['email'] = key_email
 
-    priv_key['k'] = private
-    priv_key['sigkx'] = sig_public.x
-    priv_key['sigky'] = sig_public.y
+    priv_key['k'] = private.scalar
     priv_key['name'] = key_name
     priv_key['email'] = key_email
 

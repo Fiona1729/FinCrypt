@@ -7,7 +7,6 @@ class FinCryptPublicKey(univ.Sequence):
 FinCryptPublicKey.componentType = namedtype.NamedTypes(
     namedtype.NamedType('kx', univ.Integer()),
     namedtype.NamedType('ky', univ.Integer()),
-    namedtype.NamedType('sigk', univ.Integer()),
     namedtype.NamedType('name', char.UTF8String()),
     namedtype.NamedType('email', char.UTF8String())
 )
@@ -18,8 +17,6 @@ class FinCryptPrivateKey(univ.Sequence):
 
 FinCryptPrivateKey.componentType = namedtype.NamedTypes(
     namedtype.NamedType('k', univ.Integer()),
-    namedtype.NamedType('sigkx', univ.Integer()),
-    namedtype.NamedType('sigky', univ.Integer()),
     namedtype.NamedType('name', char.UTF8String()),
     namedtype.NamedType('email', char.UTF8String())
 )

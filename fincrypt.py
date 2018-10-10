@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 
 import sha
+import traceback
 import sys
 import os
 import argparse
@@ -80,11 +81,12 @@ def encrypt_number(kx, ky, num):
 
     el_gamal = ecc.ElGamal(ecc.CURVE)
 
-    encrypted =  el_gamal.encrypt(ecc.Point(ecc.CURVE, kx, ky), num)
+    encrypted = el_gamal.encrypt(num, ecc.ECPublicKey(ecc.AffineCurvePoint(kx, ky, ecc.CURVE)))
 
-    return encrypted[0], encrypted[1].x, encrypted[1].y
+    return encrypted[0].x, encrypted[0].y, encrypted[1].x, encrypted[1].y
 
-def decrypt_number(k, c1, c2_x, c2_y):
+
+def decrypt_number(k, c1_x, c1_y, c2_x, c2_y):
     """
     Decrypts a number using the ECC curve.
 
@@ -96,7 +98,41 @@ def decrypt_number(k, c1, c2_x, c2_y):
     """
 
     el_gamal = ecc.ElGamal(ecc.CURVE)
-    return el_gamal.decrypt(k, c1, ecc.Point(ecc.CURVE, c2_x, c2_y))
+
+    return el_gamal.decrypt(ecc.AffineCurvePoint(c1_x, c1_y, ecc.CURVE), ecc.AffineCurvePoint(c2_x, c2_y, ecc.CURVE),
+                            ecc.ECPrivateKey(k, ecc.CURVE))
+
+
+def sign_number(k, num):
+    """
+    Sign a number using ECDSA.
+    Number must have a lower bit length than ecc.CURVE.n
+
+    :param k: ECC Private key scalar (int)
+    :param num: Number to sign (int)
+    :return: Tuple(r (int), s (int))
+    """
+    
+    dsa = ecc.ECDSA(ecc.CURVE)
+
+    return dsa.sign(num, ecc.ECPrivateKey(k, ecc.CURVE))
+
+
+def validate_number(kx, ky, r, s, num):
+    """
+    Validate an r and an s using ECDSA
+
+    :param kx: Public key kx (int)
+    :param ky: Public key ky (int)
+    :param r: r value of signature (int)
+    :param s: s value of signature (int)
+    :param num: Number value to validate (int)
+    :return: Whether signature is valid (bool)
+    """
+
+    dsa = ecc.ECDSA(ecc.CURVE)
+
+    return dsa.validate(r, s, num, ecc.ECPublicKey(ecc.AffineCurvePoint(kx, ky, ecc.CURVE)))
 
 
 def encrypt_message(kx, ky, message):
@@ -160,9 +196,9 @@ def decrypt_message(k, encrypted_key, encrypted_iv, encrypted_message):
     decrypted_key = []
     decrypted_iv = []
 
-    encrypted_key = [encrypted_key[i:i + 3] for i in range(0, len(encrypted_key), 3)]
+    encrypted_key = [encrypted_key[i:i + 4] for i in range(0, len(encrypted_key), 4)]
 
-    encrypted_iv = [encrypted_iv[i:i + 3] for i in range(0, len(encrypted_iv), 3)]
+    encrypted_iv = [encrypted_iv[i:i + 4] for i in range(0, len(encrypted_iv), 4)]
 
     for block in encrypted_key:
         decrypted_key.append(decrypt_number(k, *block))
@@ -180,54 +216,43 @@ def decrypt_message(k, encrypted_key, encrypted_iv, encrypted_message):
     return decrypted_message
 
 
-def sign_message(kx, ky, message):
+def sign_message(k, message):
     """
     Signs a message using an RSA signature private key (n and e), a message,
 
     Computes SHA512 hash of plaintext, and then encrypts it with private key
 
-    :param kx: ECC key kx
-    :param ky: ECC key ky
+    :param k: ECC key k
     :param message: Message to sign (bytes)
     :return: Signature (list of ints)
     """
 
-    encrypted_blocks = []
-
-    block_size = 256
-
     message_hash = sha.SHA512(message).digest()
 
-    for block in get_blocks(message_hash, block_size):
-        encrypted_blocks.append(encrypt_number(kx, ky, block))
+    block = get_blocks(message_hash, 1024)
 
-    encrypted_blocks = _flatten(encrypted_blocks)
-
-    return encrypted_blocks
+    return sign_number(k, block[0])
 
 
-def authenticate_message(k, plaintext, encrypted_blocks):
+def authenticate_message(kx, ky, plaintext, signature):
     """
     Authenticates a message when given a plaintext and signature
 
     Decrypts hash with public key, and compares alleged hash with actual
     hash of plaintext.
 
-    :param k: ECC key K
+    :param kx: ECC Public key kx
+    :param ky: ECC Public key ky
     :param plaintext: Decrypted plaintext to verify (bytes)
-    :param encrypted_blocks: The signature (list of ints)
+    :param signature: The signature (list of ints)
     :return: Whether the message signature is valid (boolean)
     """
 
-    decrypted_blocks = []
+    message_hash = sha.SHA512(plaintext).digest()
 
-    encrypted_blocks = [encrypted_blocks[i:i + 3] for i in range(0, len(encrypted_blocks), 3)]
+    block = get_blocks(message_hash, 1024)
 
-    for block in encrypted_blocks:
-        decrypted_blocks.append(decrypt_number(k, *block))
-
-    alleged_hash = get_bytes(decrypted_blocks)
-    return alleged_hash == sha.SHA512(plaintext).digest()
+    return validate_number(kx, ky, signature[0], signature[1], block[0])
 
 
 def strip_headers(pem_text):
@@ -281,8 +306,7 @@ def read_public_key(key_text):
     key, _ = decode_ber(b64_decoded, asn1Spec=FinCryptPublicKey())
     key = encode_native(key)
 
-    return {'kx': key['kx'], 'ky': key['ky'], 'sigk': key['sigk'],
-            'name': key['name'], 'email': key['email']}
+    return {'kx': key['kx'], 'ky': key['ky'], 'name': key['name'], 'email': key['email']}
 
 
 def read_private_key(key_text):
@@ -305,8 +329,7 @@ def read_private_key(key_text):
     key, _ = decode_ber(b64_decoded, asn1Spec=FinCryptPrivateKey())
     key = encode_native(key)
 
-    return {'k': key['k'], 'sigkx': key['sigkx'], 'sigky': key['sigky'],
-            'name': key['name'], 'email': key['email']}
+    return {'k': key['k'], 'name': key['name'], 'email': key['email']}
 
 
 def encrypt_and_sign(message, recipient):
@@ -346,7 +369,7 @@ def encrypt_and_sign(message, recipient):
 
     encrypted_key, encrypted_iv, encrypted_blocks = encrypt_message(recipient_key['kx'], recipient_key['ky'],
                                                                     message)
-    signature = sign_message(signer_key['sigkx'], signer_key['sigky'], message)
+    signature = sign_message(signer_key['k'], message)
 
     encrypted_message = FinCryptMessage()
 
@@ -410,9 +433,10 @@ def decrypt_and_verify(message, sender):
         decrypted_message = None
 
     try:
-        authenticated = authenticate_message(sender_key['sigk'], decrypted_message,
+        authenticated = authenticate_message(sender_key['kx'], sender_key['ky'], decrypted_message,
                                              decoded['signature'])
-    except Exception:
+    except Exception as e:
+        raise e
         authenticated = False
 
     return decrypted_message, authenticated
@@ -430,7 +454,8 @@ def encrypt_text(arguments):
     try:
         message = encrypt_and_sign(zlib.compress(arguments.infile.read(), level=9), arguments.recipient)
     except Exception as e:
-        sys.stderr.write('%s\n' % e)
+        raise e
+        sys.stderr.write('%s\n' % str(e))
         sys.exit()
 
     message = base64.b64encode(message).decode('utf-8')

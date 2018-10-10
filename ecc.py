@@ -1,9 +1,7 @@
-from random import SystemRandom
+import math
 import collections
+from random import SystemRandom
 random = SystemRandom()
-
-def inv(n, q):
-    return egcd(n, q)[0] % q
 
 
 def egcd(a, b):
@@ -477,25 +475,28 @@ class EllipticCurve(object):
 
     def on_curve(self, P):
         """Checks is a given point P is on the curve."""
-        raise Exception(NotImplemented)
+        raise NotImplementedError
+
+    def value_at(self):
+        raise NotImplementedError
 
     def point_addition(self, P, Q):
         """Returns the sum of two points P and Q on the curve."""
-        raise Exception(NotImplemented)
+        raise NotImplementedError
 
     def point_conjugate(self, P):
         """Returns the negated point -P to a given point P."""
-        raise Exception(NotImplemented)
+        raise NotImplementedError
 
     def compress(self, P):
         """Returns the compressed representation of the point P on the
         curve. Not all curves may support this operation."""
-        raise Exception(NotImplemented)
+        raise NotImplementedError
 
     def uncompress(self, compressed):
         """Returns the uncompressed representation of a point on the curve. Not
         all curves may support this operation."""
-        raise Exception(NotImplemented)
+        raise NotImplementedError
 
     def __eq__(self, other):
         return self.domainparams == other.domainparams
@@ -563,6 +564,12 @@ class TwistedEdwardsCurve(EllipticCurve):
 
     def neutral(self):
         return AffineCurvePoint(0, 1, self)
+
+    def value_at(self, x):
+        n = (-4 * (1 - self.d * x ** 2) * (x ** 2 - 1)).sqrt()
+        if n is None:
+            return None
+        return n[0] // (2 * (1 - self.d * x ** 2))
 
     def is_neutral(self, P):
         return (P.x == 0) and (P.y == 1)
@@ -646,7 +653,6 @@ class ElGamal:
     def __init__(self, curve: EllipticCurve):
         assert curve.hasgenerator
         self.curve = curve
-        self.generator = self.curve.G
 
     def _encrypt_point(self, message: AffineCurvePoint, public_key: ECPublicKey):
         assert self.curve.on_curve(message)
@@ -662,6 +668,78 @@ class ElGamal:
         assert private_key.curve == self.curve
 
         return c2 + self.curve.point_conjugate(c1 * private_key.scalar)
+
+    def encrypt(self, message: int, public_key: ECPublicKey, blocksize=32):
+        message_size = blocksize * 8
+        curve_size = self.curve.curve_order.bit_length()
+
+        k = curve_size - message_size
+
+        m = message << k
+
+        point = None
+
+        for i in range(k ** 2):
+            y = self.curve.value_at(m)
+            if y is not None:
+                point = AffineCurvePoint(m, int(y), self.curve)
+                break
+            m += 1
+        if point is None:
+            raise ValueError
+        return self._encrypt_point(point, public_key)
+
+    def decrypt(self, c1: AffineCurvePoint, c2: AffineCurvePoint, private_key: ECPrivateKey, blocksize=32):
+        message_size = blocksize * 8
+        curve_size = self.curve.curve_order.bit_length()
+
+        k = curve_size - message_size
+
+        decrypted = self._decrypt_point(c1, c2, private_key)
+
+        return int(decrypted.x) >> k
+
+
+class ECDSA:
+    def __init__(self, curve: EllipticCurve):
+        assert curve.hasgenerator
+        self.curve = curve
+        self.generator = self.curve.G
+
+
+    def sign(self, hashval: int, private_key: ECPrivateKey):
+        assert hashval.bit_length() < self.curve.n.bit_length()
+
+        k = random.randint(1, self.curve.n - 1)
+
+        r_mod_p = k * self.generator
+
+        r = int(r_mod_p.x) % self.curve.n
+
+        assert r != 0
+
+        s = FieldElement(hashval + private_key.scalar * r, self.curve.n) // k
+
+        return r, int(s)
+
+
+    def validate(self, r: int, s: int, hashval: int, public_key: ECPublicKey):
+        assert hashval.bit_length() < self.curve.n.bit_length()
+        assert 0 < r < self.curve.n
+        assert 0 < s < self.curve.n
+
+        s = FieldElement(s, self.curve.n)
+
+        w = s.inverse()
+
+        u1 = int(hashval * w)
+        u2 = int(r * w)
+
+        pt = (u1 * self.curve.G) + (u2 * public_key.point)
+
+        x1 = int(pt.x) % self.curve.n
+
+        return x1 == r
 
 
 CURVE = TwistedEdwardsCurve(a=1,
