@@ -90,7 +90,8 @@ def decrypt_number(k, c1_x, c1_y, c2_x, c2_y):
     Decrypts a number using the ECC curve.
 
     :param k: The private key (int)
-    :param c1: The c1 of the encrypted message (int)
+    :param c1_x: The x value of c1 (int)
+    :param c1_y: The y value of c1 (int)
     :param c2_x: The x value of c2 (int)
     :param c2_y: The y value of c2 (int)
     :return: Original number (int)
