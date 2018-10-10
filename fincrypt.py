@@ -10,6 +10,7 @@ import zlib
 import randomart
 import re
 import ecc
+import hashlib
 from asn1spec import FinCryptPublicKey, FinCryptPrivateKey, FinCryptMessage
 from pyasn1.codec.ber.decoder import decode as decode_ber
 from pyasn1.codec.native.encoder import encode as encode_native
@@ -69,40 +70,6 @@ def get_bytes(block_nums):
     return b''.join(message)
 
 
-def encrypt_number(kx, ky, num):
-    """
-    Encrypts a number using the ECC curve.
-
-    :param kx: The x value of the public key's point (int)
-    :param ky: The y value of the public key's point (int)
-    :param num: The number to encrypt (int)
-    :return: Tuple (c1 (int), c2 (ecc.Point))
-    """
-
-    el_gamal = ecc.ElGamal(ecc.CURVE)
-
-    encrypted = el_gamal.encrypt(num, ecc.ECPublicKey(ecc.AffineCurvePoint(kx, ky, ecc.CURVE)))
-
-    return encrypted[0].x, encrypted[0].y, encrypted[1].x, encrypted[1].y
-
-
-def decrypt_number(k, c1_x, c1_y, c2_x, c2_y):
-    """
-    Decrypts a number using the ECC curve.
-
-    :param k: The private key (int)
-    :param c1: The c1 of the encrypted message (int)
-    :param c2_x: The x value of c2 (int)
-    :param c2_y: The y value of c2 (int)
-    :return: Original number (int)
-    """
-
-    el_gamal = ecc.ElGamal(ecc.CURVE)
-
-    return el_gamal.decrypt(ecc.AffineCurvePoint(c1_x, c1_y, ecc.CURVE), ecc.AffineCurvePoint(c2_x, c2_y, ecc.CURVE),
-                            ecc.ECPrivateKey(k, ecc.CURVE))
-
-
 def sign_number(k, num):
     """
     Sign a number using ECDSA.
@@ -156,31 +123,24 @@ def encrypt_message(kx, ky, message):
     encrypted_key = []
     encrypted_iv = []
 
-    key = os.urandom(32)
-    iv = os.urandom(16)
+    eis = ecc.ECEIS(ecc.CURVE)
 
-    block_size = 256
+    r, key_point = eis.exchange(ecc.ECPublicKey(ecc.AffineCurvePoint(kx, ky, ecc.CURVE)))
 
-    message_encryptor = Encrypter(mode=AESModeOfOperationCBC(key=key, iv=iv))
+    key = hashlib.pbkdf2_hmac('sha256', get_bytes([int(key_point.x)]) + get_bytes([int(key_point.y)]), b'fincrypt', 1000000, 32 + 16)
+    
+    message_encryptor = Encrypter(mode=AESModeOfOperationCBC(key=key[:32], iv=key[32:]))
 
     encrypted_blocks = message_encryptor.feed(message)
 
     encrypted_blocks += message_encryptor.feed()
 
-    for block in get_blocks(key, block_size):
-        encrypted_key.append(encrypt_number(kx, ky, block))
-
-    for block in get_blocks(iv, block_size):
-        encrypted_iv.append(encrypt_number(kx, ky, block))
-
-    encrypted_key = _flatten(encrypted_key)
-
-    encrypted_iv = _flatten(encrypted_iv)
-
-    return encrypted_key, encrypted_iv, encrypted_blocks
+    encrypted_key = [int(r.x), int(r.y)]
+    
+    return encrypted_key, encrypted_blocks
 
 
-def decrypt_message(k, encrypted_key, encrypted_iv, encrypted_message):
+def decrypt_message(k, encrypted_key, encrypted_message):
     """
     Decrypts a message encrypted by the encrypt_message function
     First decrypts the AES key and IV using ECC
@@ -192,23 +152,13 @@ def decrypt_message(k, encrypted_key, encrypted_iv, encrypted_message):
     :param encrypted_message: AES encrypted data (bytes
     :return: Decrypted data (bytes)
     """
+    eis = ecc.ECEIS(ecc.CURVE)
+    
+    key_point = eis.recover(ecc.AffineCurvePoint(encrypted_key[0], encrypted_key[1], ecc.CURVE), ecc.ECPrivateKey(k, ecc.CURVE))
 
-    decrypted_key = []
-    decrypted_iv = []
+    key = key = hashlib.pbkdf2_hmac('sha256', get_bytes([int(key_point.x)]) + get_bytes([int(key_point.y)]), b'fincrypt', 1000000, 32 + 16)
 
-    encrypted_key = [encrypted_key[i:i + 4] for i in range(0, len(encrypted_key), 4)]
-
-    encrypted_iv = [encrypted_iv[i:i + 4] for i in range(0, len(encrypted_iv), 4)]
-
-    for block in encrypted_key:
-        decrypted_key.append(decrypt_number(k, *block))
-    decrypted_key = get_bytes(decrypted_key)
-
-    for block in encrypted_iv:
-        decrypted_iv.append(decrypt_number(k, *block))
-    decrypted_iv = get_bytes(decrypted_iv)
-
-    message_decryptor = Decrypter(mode=AESModeOfOperationCBC(decrypted_key, iv=decrypted_iv))
+    message_decryptor = Decrypter(mode=AESModeOfOperationCBC(key[:32], iv=key[32:]))
 
     decrypted_message = message_decryptor.feed(encrypted_message)
     decrypted_message += message_decryptor.feed()
@@ -367,7 +317,7 @@ def encrypt_and_sign(message, recipient):
     except Exception:
         raise FinCryptDecodingError('Private key file is malformed.')
 
-    encrypted_key, encrypted_iv, encrypted_blocks = encrypt_message(recipient_key['kx'], recipient_key['ky'],
+    encrypted_key, encrypted_blocks = encrypt_message(recipient_key['kx'], recipient_key['ky'],
                                                                     message)
     signature = sign_message(signer_key['k'], message)
 
@@ -375,7 +325,6 @@ def encrypt_and_sign(message, recipient):
 
     encrypted_message['message'] = encrypted_blocks
     encrypted_message['key'].extend(encrypted_key)
-    encrypted_message['iv'].extend(encrypted_iv)
     encrypted_message['signature'].extend(signature)
 
     encoded_message = encode_der(encrypted_message)
@@ -427,11 +376,11 @@ def decrypt_and_verify(message, sender):
 
     try:
         decrypted_message = decrypt_message(decryption_key['k'],
-                                            decoded['key'], decoded['iv'],
-                                            decoded['message'])
-    except Exception:
+                                            decoded['key'], decoded['message'])
+    except Exception as e:
+        raise e
         decrypted_message = None
-
+        
     try:
         authenticated = authenticate_message(sender_key['kx'], sender_key['ky'], decrypted_message,
                                              decoded['signature'])
@@ -530,11 +479,7 @@ def decrypt_binary(arguments):
     """
 
     in_message = arguments.infile.read()
-    try:
-        message, verified = decrypt_and_verify(in_message, arguments.sender)
-    except Exception as e:
-        sys.stderr.write('%s\n' % e)
-        sys.exit()
+    message, verified = decrypt_and_verify(in_message, arguments.sender)
 
     if message is None:
         sys.stderr.write('Decryption failed.\n')

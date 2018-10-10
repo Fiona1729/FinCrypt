@@ -705,6 +705,7 @@ class ECEIS:
         assert curve.hasgenerator
         self.curve = curve
 
+
     def exchange(self, public_key: ECPublicKey):
         r = random.randint(1, self.curve.n - 1)
 
@@ -712,6 +713,7 @@ class ECEIS:
         S = r * public_key.point
 
         return R, S
+
 
     def recover(self, r, private_key: ECPrivateKey):
         return private_key.scalar * r
