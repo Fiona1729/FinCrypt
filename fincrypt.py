@@ -1,7 +1,6 @@
 #!/usr/bin/env python3
 
 import sha
-import traceback
 import sys
 import os
 import argparse
