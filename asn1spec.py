@@ -32,6 +32,7 @@ class FinCryptMessage(univ.Sequence):
 
 FinCryptMessage.componentType = namedtype.NamedTypes(
     namedtype.NamedType('key', IntSequence()),
+    namedtype.NamedType('iv', IntSequence()),
     namedtype.NamedType('message', univ.OctetString()),
     namedtype.NamedType('signature', IntSequence())
 )
