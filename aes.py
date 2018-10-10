@@ -18,37 +18,30 @@ def _concat_list(a, b):
     return a + b
 
 
-# Python 3 compatibility
-try:
-    xrange
-except Exception:
-    xrange = range
+# Python 3 supports bytes, which is already an array of integers
+def _string_to_bytes(text):
+    if isinstance(text, bytes):
+        return text
+    return [ord(c) for c in text]
 
 
-    # Python 3 supports bytes, which is already an array of integers
-    def _string_to_bytes(text):
-        if isinstance(text, bytes):
-            return text
-        return [ord(c) for c in text]
+# In Python 3, we return bytes
+def _bytes_to_string(binary):
+    return bytes(binary)
 
 
-    # In Python 3, we return bytes
-    def _bytes_to_string(binary):
-        return bytes(binary)
-
-
-    # Python 3 cannot concatenate a list onto a bytes, so we bytes-ify it first
-    def _concat_list(a, b):
-        return a + bytes(b)
+# Python 3 cannot concatenate a list onto a bytes, so we bytes-ify it first
+def _concat_list(a, b):
+    return a + bytes(b)
 
 
 # Based *largely* on the Rijndael implementation
 # See: http://csrc.nist.gov/publications/fips/fips197/fips-197.pdf
 class AES(object):
-    '''Encapsulates the AES block cipher.
+    """Encapsulates the AES block cipher.
 
     You generally should not need this. Use the AESModeOfOperation classes
-    below instead.'''
+    below instead."""
 
     # Number of rounds by keysize
     number_of_rounds = {16: 10, 24: 12, 32: 14}
@@ -451,28 +444,28 @@ class AES(object):
         rounds = self.number_of_rounds[len(key)]
 
         # Encryption round keys
-        self._Ke = [[0] * 4 for i in xrange(rounds + 1)]
+        self._Ke = [[0] * 4 for _ in range(rounds + 1)]
 
         # Decryption round keys
-        self._Kd = [[0] * 4 for i in xrange(rounds + 1)]
+        self._Kd = [[0] * 4 for _ in range(rounds + 1)]
 
         round_key_count = (rounds + 1) * 4
-        KC = len(key) // 4
+        kc = len(key) // 4
 
         # Convert the key into ints
-        tk = [struct.unpack('>i', key[i:i + 4])[0] for i in xrange(0, len(key), 4)]
+        tk = [struct.unpack('>i', key[i:i + 4])[0] for i in range(0, len(key), 4)]
 
         # Copy values into round key arrays
-        for i in xrange(0, KC):
+        for i in range(0, kc):
             self._Ke[i // 4][i % 4] = tk[i]
             self._Kd[rounds - (i // 4)][i % 4] = tk[i]
 
         # Key expansion (fips-197 section 5.2)
         rconpointer = 0
-        t = KC
+        t = kc
         while t < round_key_count:
 
-            tt = tk[KC - 1]
+            tt = tk[kc - 1]
             tk[0] ^= ((self.S[(tt >> 16) & 0xFF] << 24) ^
                       (self.S[(tt >> 8) & 0xFF] << 16) ^
                       (self.S[tt & 0xFF] << 8) ^
@@ -480,35 +473,35 @@ class AES(object):
                       (self.rcon[rconpointer] << 24))
             rconpointer += 1
 
-            if KC != 8:
-                for i in xrange(1, KC):
+            if kc != 8:
+                for i in range(1, kc):
                     tk[i] ^= tk[i - 1]
 
             # Key expansion for 256-bit keys is "slightly different" (fips-197)
             else:
-                for i in xrange(1, KC // 2):
+                for i in range(1, kc // 2):
                     tk[i] ^= tk[i - 1]
-                tt = tk[KC // 2 - 1]
+                tt = tk[kc // 2 - 1]
 
-                tk[KC // 2] ^= (self.S[tt & 0xFF] ^
+                tk[kc // 2] ^= (self.S[tt & 0xFF] ^
                                 (self.S[(tt >> 8) & 0xFF] << 8) ^
                                 (self.S[(tt >> 16) & 0xFF] << 16) ^
                                 (self.S[(tt >> 24) & 0xFF] << 24))
 
-                for i in xrange(KC // 2 + 1, KC):
+                for i in range(kc // 2 + 1, kc):
                     tk[i] ^= tk[i - 1]
 
             # Copy values into round key arrays
             j = 0
-            while j < KC and t < round_key_count:
+            while j < kc and t < round_key_count:
                 self._Ke[t // 4][t % 4] = tk[j]
                 self._Kd[rounds - (t // 4)][t % 4] = tk[j]
                 j += 1
                 t += 1
 
         # Inverse-Cipher-ify the decryption round key (fips-197 section 5.3)
-        for r in xrange(1, rounds):
-            for j in xrange(0, 4):
+        for r in range(1, rounds):
+            for j in range(0, 4):
                 tt = self._Kd[r][j]
                 self._Kd[r][j] = (self.U1[(tt >> 24) & 0xFF] ^
                                   self.U2[(tt >> 16) & 0xFF] ^
@@ -516,7 +509,7 @@ class AES(object):
                                   self.U4[tt & 0xFF])
 
     def encrypt(self, plaintext):
-        'Encrypt a block of plain text using the AES block cipher.'
+        """"Encrypt a block of plain text using the AES block cipher."""
 
         if len(plaintext) != 16:
             raise ValueError('wrong block length')
@@ -526,11 +519,11 @@ class AES(object):
         a = [0, 0, 0, 0]
 
         # Convert plaintext to (ints ^ key)
-        t = [(_compact_word(plaintext[4 * i:4 * i + 4]) ^ self._Ke[0][i]) for i in xrange(0, 4)]
+        t = [(_compact_word(plaintext[4 * i:4 * i + 4]) ^ self._Ke[0][i]) for i in range(0, 4)]
 
         # Apply round transforms
-        for r in xrange(1, rounds):
-            for i in xrange(0, 4):
+        for r in range(1, rounds):
+            for i in range(0, 4):
                 a[i] = (self.T1[(t[i] >> 24) & 0xFF] ^
                         self.T2[(t[(i + s1) % 4] >> 16) & 0xFF] ^
                         self.T3[(t[(i + s2) % 4] >> 8) & 0xFF] ^
@@ -540,7 +533,7 @@ class AES(object):
 
         # The last round is special
         result = []
-        for i in xrange(0, 4):
+        for i in range(0, 4):
             tt = self._Ke[rounds][i]
             result.append((self.S[(t[i] >> 24) & 0xFF] ^ (tt >> 24)) & 0xFF)
             result.append((self.S[(t[(i + s1) % 4] >> 16) & 0xFF] ^ (tt >> 16)) & 0xFF)
@@ -550,7 +543,7 @@ class AES(object):
         return result
 
     def decrypt(self, ciphertext):
-        'Decrypt a block of cipher text using the AES block cipher.'
+        """Decrypt a block of cipher text using the AES block cipher."""
 
         if len(ciphertext) != 16:
             raise ValueError('wrong block length')
@@ -560,11 +553,11 @@ class AES(object):
         a = [0, 0, 0, 0]
 
         # Convert ciphertext to (ints ^ key)
-        t = [(_compact_word(ciphertext[4 * i:4 * i + 4]) ^ self._Kd[0][i]) for i in xrange(0, 4)]
+        t = [(_compact_word(ciphertext[4 * i:4 * i + 4]) ^ self._Kd[0][i]) for i in range(0, 4)]
 
         # Apply round transforms
-        for r in xrange(1, rounds):
-            for i in xrange(0, 4):
+        for r in range(1, rounds):
+            for i in range(0, 4):
                 a[i] = (self.T5[(t[i] >> 24) & 0xFF] ^
                         self.T6[(t[(i + s1) % 4] >> 16) & 0xFF] ^
                         self.T7[(t[(i + s2) % 4] >> 8) & 0xFF] ^
@@ -574,7 +567,7 @@ class AES(object):
 
         # The last round is special
         result = []
-        for i in xrange(0, 4):
+        for i in range(0, 4):
             tt = self._Kd[rounds][i]
             result.append((self.Si[(t[i] >> 24) & 0xFF] ^ (tt >> 24)) & 0xFF)
             result.append((self.Si[(t[(i + s1) % 4] >> 16) & 0xFF] ^ (tt >> 16)) & 0xFF)
@@ -585,22 +578,24 @@ class AES(object):
 
 
 class Counter(object):
-    '''A counter object for the Counter (CTR) mode of operation.
+    """A counter object for the Counter (CTR) mode of operation.
 
        To create a custom counter, you can usually just override the
-       increment method.'''
+       increment method."""
 
     def __init__(self, initial_value=1):
 
         # Convert the value into an array of bytes long
-        self._counter = [((initial_value >> i) % 256) for i in xrange(128 - 8, -1, -8)]
+        self._counter = [((initial_value >> i) % 256) for i in range(128 - 8, -1, -8)]
 
-    value = property(lambda s: s._counter)
+    @property
+    def value(self):
+        return self._counter
 
     def increment(self):
-        '''Increment the counter (overflow rolls back to 0).'''
+        """Increment the counter (overflow rolls back to 0)."""
 
-        for i in xrange(len(self._counter) - 1, -1, -1):
+        for i in range(len(self._counter) - 1, -1, -1):
             self._counter[i] += 1
 
             if self._counter[i] < 256: break
@@ -614,7 +609,7 @@ class Counter(object):
 
 
 class AESBlockModeOfOperation(object):
-    '''Super-class for AES modes of operation that require blocks.'''
+    """Super-class for AES modes of operation that require blocks."""
 
     def __init__(self, key):
         self._aes = AES(key)
@@ -627,17 +622,17 @@ class AESBlockModeOfOperation(object):
 
 
 class AESStreamModeOfOperation(AESBlockModeOfOperation):
-    '''Super-class for AES modes of operation that are stream-ciphers.'''
+    """Super-class for AES modes of operation that are stream-ciphers."""
 
 
 class AESSegmentModeOfOperation(AESStreamModeOfOperation):
-    '''Super-class for AES modes of operation that segment data.'''
+    """Super-class for AES modes of operation that segment data."""
 
     segment_bytes = 16
 
 
 class AESModeOfOperationECB(AESBlockModeOfOperation):
-    '''AES Electronic Codebook Mode of Operation.
+    """AES Electronic Codebook Mode of Operation.
 
        o Block-cipher, so data must be padded to 16 byte boundaries
 
@@ -648,7 +643,7 @@ class AESModeOfOperationECB(AESBlockModeOfOperation):
 
    Also see:
        o https://en.wikipedia.org/wiki/Block_cipher_mode_of_operation#Electronic_codebook_.28ECB.29
-       o See NIST SP800-38A (http://csrc.nist.gov/publications/nistpubs/800-38a/sp800-38a.pdf); section 6.1'''
+       o See NIST SP800-38A (http://csrc.nist.gov/publications/nistpubs/800-38a/sp800-38a.pdf); section 6.1"""
 
     name = "Electronic Codebook (ECB)"
 
@@ -668,7 +663,7 @@ class AESModeOfOperationECB(AESBlockModeOfOperation):
 
 
 class AESModeOfOperationCBC(AESBlockModeOfOperation):
-    '''AES Cipher-Block Chaining Mode of Operation.
+    """AES Cipher-Block Chaining Mode of Operation.
 
        o The Initialization Vector (IV)
        o Block-cipher, so data must be padded to 16 byte boundaries
@@ -683,7 +678,7 @@ class AESModeOfOperationCBC(AESBlockModeOfOperation):
 
    Also see:
        o https://en.wikipedia.org/wiki/Block_cipher_mode_of_operation#Cipher-block_chaining_.28CBC.29
-       o See NIST SP800-38A (http://csrc.nist.gov/publications/nistpubs/800-38a/sp800-38a.pdf); section 6.2'''
+       o See NIST SP800-38A (http://csrc.nist.gov/publications/nistpubs/800-38a/sp800-38a.pdf); section 6.2"""
 
     name = "Cipher-Block Chaining (CBC)"
 
@@ -719,14 +714,14 @@ class AESModeOfOperationCBC(AESBlockModeOfOperation):
 
 
 class AESModeOfOperationCFB(AESSegmentModeOfOperation):
-    '''AES Cipher Feedback Mode of Operation.
+    """AES Cipher Feedback Mode of Operation.
 
        o A stream-cipher, so input does not need to be padded to blocks,
          but does need to be padded to segment_size
 
     Also see:
        o https://en.wikipedia.org/wiki/Block_cipher_mode_of_operation#Cipher_feedback_.28CFB.29
-       o See NIST SP800-38A (http://csrc.nist.gov/publications/nistpubs/800-38a/sp800-38a.pdf); section 6.3'''
+       o See NIST SP800-38A (http://csrc.nist.gov/publications/nistpubs/800-38a/sp800-38a.pdf); section 6.3"""
 
     name = "Cipher Feedback (CFB)"
 
@@ -744,7 +739,7 @@ class AESModeOfOperationCFB(AESSegmentModeOfOperation):
 
         AESBlockModeOfOperation.__init__(self, key)
 
-    segment_bytes = property(lambda s: s._segment_bytes)
+    segment_bytes = property(lambda self: self._segment_bytes)
 
     def encrypt(self, plaintext):
         if len(plaintext) % self._segment_bytes != 0:
@@ -754,7 +749,7 @@ class AESModeOfOperationCFB(AESSegmentModeOfOperation):
 
         # Break block into segments
         encrypted = []
-        for i in xrange(0, len(plaintext), self._segment_bytes):
+        for i in range(0, len(plaintext), self._segment_bytes):
             plaintext_segment = plaintext[i: i + self._segment_bytes]
             xor_segment = self._aes.encrypt(self._shift_register)[:len(plaintext_segment)]
             cipher_segment = [(p ^ x) for (p, x) in zip(plaintext_segment, xor_segment)]
@@ -774,7 +769,7 @@ class AESModeOfOperationCFB(AESSegmentModeOfOperation):
 
         # Break block into segments
         decrypted = []
-        for i in xrange(0, len(ciphertext), self._segment_bytes):
+        for i in range(0, len(ciphertext), self._segment_bytes):
             cipher_segment = ciphertext[i: i + self._segment_bytes]
             xor_segment = self._aes.encrypt(self._shift_register)[:len(cipher_segment)]
             plaintext_segment = [(p ^ x) for (p, x) in zip(cipher_segment, xor_segment)]
@@ -788,7 +783,7 @@ class AESModeOfOperationCFB(AESSegmentModeOfOperation):
 
 
 class AESModeOfOperationOFB(AESStreamModeOfOperation):
-    '''AES Output Feedback Mode of Operation.
+    """AES Output Feedback Mode of Operation.
 
        o A stream-cipher, so input does not need to be padded to blocks,
          allowing arbitrary length data.
@@ -798,7 +793,7 @@ class AESModeOfOperationOFB(AESStreamModeOfOperation):
 
     Also see:
        o https://en.wikipedia.org/wiki/Block_cipher_mode_of_operation#Output_feedback_.28OFB.29
-       o See NIST SP800-38A (http://csrc.nist.gov/publications/nistpubs/800-38a/sp800-38a.pdf); section 6.4'''
+       o See NIST SP800-38A (http://csrc.nist.gov/publications/nistpubs/800-38a/sp800-38a.pdf); section 6.4"""
 
     name = "Output Feedback (OFB)"
 
@@ -833,7 +828,7 @@ class AESModeOfOperationOFB(AESStreamModeOfOperation):
 
 
 class AESModeOfOperationCTR(AESStreamModeOfOperation):
-    '''AES Counter Mode of Operation.
+    """AES Counter Mode of Operation.
 
        o A stream-cipher, so input does not need to be padded to blocks,
          allowing arbitrary length data.
@@ -856,7 +851,7 @@ class AESModeOfOperationCTR(AESStreamModeOfOperation):
 
        o https://en.wikipedia.org/wiki/Block_cipher_mode_of_operation#Counter_.28CTR.29
        o See NIST SP800-38A (http://csrc.nist.gov/publications/nistpubs/800-38a/sp800-38a.pdf); section 6.5
-         and Appendix B for managing the initial counter'''
+         and Appendix B for managing the initial counter"""
 
     name = "Counter (CTR)"
 
@@ -906,12 +901,12 @@ def _get_byte(c):
     return c
 
 
-def append_PKCS7_padding(data):
+def append_pkcs7_padding(data):
     pad = 16 - (len(data) % 16)
     return data + to_bufferable(chr(pad) * pad)
 
 
-def strip_PKCS7_padding(data):
+def strip_pkcs7_padding(data):
     if len(data) % 16 != 0:
         raise ValueError("invalid length")
 
@@ -953,7 +948,7 @@ def _block_can_consume(self, size):
 # After padding, we may have more than one block
 def _block_final_encrypt(self, data, padding=PADDING_DEFAULT):
     if padding == PADDING_DEFAULT:
-        data = append_PKCS7_padding(data)
+        data = append_pkcs7_padding(data)
 
     elif padding == PADDING_NONE:
         if len(data) != 16:
@@ -969,7 +964,7 @@ def _block_final_encrypt(self, data, padding=PADDING_DEFAULT):
 
 def _block_final_decrypt(self, data, padding=PADDING_DEFAULT):
     if padding == PADDING_DEFAULT:
-        return strip_PKCS7_padding(self.decrypt(data))
+        return strip_pkcs7_padding(self.decrypt(data))
 
     if padding == PADDING_NONE:
         if len(data) != 16:
@@ -1041,9 +1036,9 @@ AESStreamModeOfOperation._final_decrypt = _stream_final_decrypt
 
 
 class BlockFeeder(object):
-    '''The super-class for objects to handle chunking a stream of bytes
+    """The super-class for objects to handle chunking a stream of bytes
        into the appropriate block size for the underlying mode of operation
-       and applying (or stripping) padding, as necessary.'''
+       and applying (or stripping) padding, as necessary."""
 
     def __init__(self, mode, feed, final, padding=PADDING_DEFAULT):
         self._mode = mode
@@ -1053,12 +1048,12 @@ class BlockFeeder(object):
         self._padding = padding
 
     def feed(self, data=None):
-        '''Provide bytes to encrypt (or decrypt), returning any bytes
+        """Provide bytes to encrypt (or decrypt), returning any bytes
            possible from this or any previous calls to feed.
 
            Call with None or an empty string to flush the mode of
            operation and return any final bytes; no further calls to
-           feed may be made.'''
+           feed may be made."""
 
         if self._buffer is None:
             raise ValueError('already finished feeder')
@@ -1083,14 +1078,14 @@ class BlockFeeder(object):
 
 
 class Encrypter(BlockFeeder):
-    'Accepts bytes of plaintext and returns encrypted ciphertext.'
+    """Accepts bytes of plaintext and returns encrypted ciphertext."""
 
     def __init__(self, mode, padding=PADDING_DEFAULT):
         BlockFeeder.__init__(self, mode, mode.encrypt, mode._final_encrypt, padding)
 
 
 class Decrypter(BlockFeeder):
-    'Accepts bytes of ciphertext and returns decrypted plaintext.'
+    """Accepts bytes of ciphertext and returns decrypted plaintext."""
 
     def __init__(self, mode, padding=PADDING_DEFAULT):
         BlockFeeder.__init__(self, mode, mode.decrypt, mode._final_decrypt, padding)
@@ -1101,7 +1096,7 @@ BLOCK_SIZE = (1 << 13)
 
 
 def _feed_stream(feeder, in_stream, out_stream, block_size=BLOCK_SIZE):
-    'Uses feeder to read and convert from in_stream and write to out_stream.'
+    """Uses feeder to read and convert from in_stream and write to out_stream."""
 
     while True:
         chunk = in_stream.read(block_size)
@@ -1114,14 +1109,14 @@ def _feed_stream(feeder, in_stream, out_stream, block_size=BLOCK_SIZE):
 
 
 def encrypt_stream(mode, in_stream, out_stream, block_size=BLOCK_SIZE, padding=PADDING_DEFAULT):
-    'Encrypts a stream of bytes from in_stream to out_stream using mode.'
+    """Encrypts a stream of bytes from in_stream to out_stream using mode."""
 
     encrypter = Encrypter(mode, padding=padding)
     _feed_stream(encrypter, in_stream, out_stream, block_size)
 
 
 def decrypt_stream(mode, in_stream, out_stream, block_size=BLOCK_SIZE, padding=PADDING_DEFAULT):
-    'Decrypts a stream of bytes from in_stream to out_stream using mode.'
+    """Decrypts a stream of bytes from in_stream to out_stream using mode."""
 
     decrypter = Decrypter(mode, padding=padding)
     _feed_stream(decrypter, in_stream, out_stream, block_size)

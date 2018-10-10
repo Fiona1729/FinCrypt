@@ -42,7 +42,8 @@ class SHA512(object):
         if m is not None:
             self.update(m)
 
-    def _rotr(self, x, y):
+    @staticmethod
+    def _rotr(x, y):
         return ((x >> y) | (x << (64 - y))) & 0xFFFFFFFFFFFFFFFF
 
     def _sha512_process(self, chunk):

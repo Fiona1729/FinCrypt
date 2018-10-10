@@ -434,8 +434,7 @@ def decrypt_and_verify(message, sender):
     try:
         authenticated = authenticate_message(sender_key['kx'], sender_key['ky'], decrypted_message,
                                              decoded['signature'])
-    except Exception as e:
-        raise e
+    except Exception:
         authenticated = False
 
     return decrypted_message, authenticated
@@ -450,12 +449,7 @@ def encrypt_text(arguments):
     :param arguments: Argparser arguments object.
     :return: None
     """
-    try:
-        message = encrypt_and_sign(zlib.compress(arguments.infile.read(), level=9), arguments.recipient)
-    except Exception as e:
-        raise e
-        sys.stderr.write('%s\n' % str(e))
-        sys.exit()
+    message = encrypt_and_sign(zlib.compress(arguments.infile.read(), level=9), arguments.recipient)
 
     message = base64.b64encode(message).decode('utf-8')
 
@@ -508,11 +502,7 @@ def encrypt_binary(arguments):
     :return: None
     """
 
-    try:
-        message = encrypt_and_sign(zlib.compress(arguments.infile.read(), level=9), arguments.recipient)
-    except Exception as e:
-        sys.stderr.write('%s\n' % e)
-        sys.exit()
+    message = encrypt_and_sign(zlib.compress(arguments.infile.read(), level=9), arguments.recipient)
 
 
     sys.stdout.buffer.write(message)
