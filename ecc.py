@@ -1,6 +1,4 @@
-import math
 import collections
-import sha
 from random import SystemRandom
 random = SystemRandom()
 

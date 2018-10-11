@@ -343,7 +343,8 @@ def encrypt_and_sign(message, recipient_key, signer_key):
     Raises exceptions if key files are not found, or are malformed.
 
     :param message: Message to encrypt (bytes)
-    :param recipient: Recipient's public key filename (string)
+    :param recipient_key: Recipient's public key (file like object)
+    :param signer_key: Signer's private key (file like object)
     :return: Bytes of encrypted and encoded message and signature.
     """
 
@@ -360,7 +361,7 @@ def encrypt_and_sign(message, recipient_key, signer_key):
     try:
         encrypted_key, encrypted_iv, encrypted_blocks = encrypt_message(recipient_key['kx'], recipient_key['ky'],
                                                                         message)
-    except:
+    except Exception:
         raise FinCryptDecodingError('Unknown error encountered when encrypting message.')
 
     signature = sign_message(signer_key['k'], message)
@@ -388,7 +389,8 @@ def decrypt_and_verify(message, private_key, sender_key):
     Raises exceptions if key files are not found, or are malformed.
 
     :param message: Message to decrypt (bytes)
-    :param sender: Sender's public key filename (string)
+    :param private_key: Decrypter's private key (file like object)
+    :param sender_key: Sender's public key (file like object)
     :return: Tuple (decrypted message (bytes), whether the message was verified (boolean))
     If message was unable to be decrypted, the tuple will be (None, False)
     """
@@ -479,7 +481,7 @@ def decrypt_text(arguments):
 
         with open(PRIVATE_KEY) as private_key, open(sender_keyfile) as sender_key:
             message, verified = decrypt_and_verify(in_message, private_key, sender_key)
-    except:
+    except Exception:
         raise FinCryptDecodingError('Message was malformed.')
 
     if message is None:
@@ -503,8 +505,16 @@ def encrypt_binary(arguments):
     :param arguments: Argparser arguments object.
     :return: None
     """
+    recipient_keyfile = os.path.join(PUBLIC_PATH, arguments.recipient)
 
-    message = encrypt_and_sign(zlib.compress(arguments.infile.read(), level=9), arguments.recipient)
+    if not os.path.exists(recipient_keyfile):
+        raise FileNotFoundError('Recipient keyfile does not exist.')
+
+    if not os.path.exists(PRIVATE_KEY):
+        raise FileNotFoundError('Private keyfile does not exist.')
+
+    with open(recipient_keyfile) as recipient_key, open(PRIVATE_KEY) as private_key:
+        message = encrypt_and_sign(zlib.compress(arguments.infile.read(), level=9), recipient_key, private_key)
 
     sys.stdout.buffer.write(message)
 
@@ -519,12 +529,21 @@ def decrypt_binary(arguments):
     :return: None
     """
 
+    sender_keyfile = os.path.join(PUBLIC_PATH, arguments.sender)
+
+    if not os.path.exists(sender_keyfile):
+        raise FileNotFoundError('Sender keyfile does not exist.')
+
+    if not os.path.exists(PRIVATE_KEY):
+        raise FileNotFoundError('Private keyfile does not exist.')
+
     in_message = arguments.infile.read()
+
     try:
-        message, verified = decrypt_and_verify(in_message, arguments.sender)
-    except Exception as e:
-        sys.stderr.write('%s\n' % e)
-        sys.exit()
+        with open(PRIVATE_KEY) as private_key, open(sender_keyfile) as sender_key:
+            message, verified = decrypt_and_verify(in_message, private_key, sender_key)
+    except Exception:
+        raise FinCryptDecodingError('Message was malformed.')
 
     if message is None:
         sys.stderr.write('Decryption failed.\n')
