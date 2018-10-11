@@ -512,7 +512,8 @@ class EllipticCurve:
         return not (self == other)
 
 
-_TwistedEdwardsCurveDomainParameters = collections.namedtuple("TwistedEdwardsCurveDomainParameters", [ "curvetype", "a", "d", "p", "n", "g" ])
+_TwistedEdwardsCurveDomainParameters = collections.namedtuple("TwistedEdwardsCurveDomainParameters",
+                                                              ["curvetype", "a", "d", "p", "n", "g"])
 
 
 class TwistedEdwardsCurve(EllipticCurve):
@@ -573,6 +574,7 @@ class TwistedEdwardsCurve(EllipticCurve):
     def domainparams(self):
         return _TwistedEdwardsCurveDomainParameters(curvetype=self.curvetype, a=self.a, d=self.d, p=self.p, n=self.n,
                                                     g=self.g)
+
     def neutral(self):
         return AffineCurvePoint(0, 1, self)
 
@@ -725,7 +727,7 @@ class ECEIS:
         return r, s
 
     @staticmethod
-    def recover(self, r, private_key: ECPrivateKey):
+    def recover(r, private_key: ECPrivateKey):
         return private_key.scalar * r
 
         
@@ -734,7 +736,6 @@ class ECDSA:
         assert curve.hasgenerator
         self.curve = curve
         self.generator = self.curve.g
-
 
     def sign(self, hashval: int, private_key: ECPrivateKey):
         assert hashval.bit_length() < self.curve.n.bit_length()
@@ -750,7 +751,6 @@ class ECDSA:
         s = FieldElement(hashval + private_key.scalar * r, self.curve.n) // k
 
         return r, int(s)
-
 
     def validate(self, r: int, s: int, hashval: int, public_key: ECPublicKey):
         assert hashval.bit_length() < self.curve.n.bit_length()
@@ -769,6 +769,7 @@ class ECDSA:
         x1 = int(pt.x) % self.curve.n
 
         return x1 == r
+
 
 # This is the E-521 curve from http://safecurves.cr.yp.to
 CURVE = TwistedEdwardsCurve(a=1,
