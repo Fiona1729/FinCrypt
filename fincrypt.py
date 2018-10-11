@@ -332,7 +332,7 @@ def read_private_key(key_text):
     return {'k': key['k'], 'name': key['name'], 'email': key['email']}
 
 
-def encrypt_and_sign(message, recipient):
+def encrypt_and_sign(message, recipient_key, signer_key):
     """
     Encrypts and signs a message using a recipient's public key name
     Looks for the recipient's public key in the public_keys/ directory.
@@ -347,28 +347,22 @@ def encrypt_and_sign(message, recipient):
     :return: Bytes of encrypted and encoded message and signature.
     """
 
-    recipient_key = os.path.join(PUBLIC_PATH, recipient)
-
-    if not os.path.exists(recipient_key):
-        raise FileNotFoundError('Recipient keyfile does not exist.')
-
-    if not os.path.exists(PRIVATE_KEY):
-        raise FileNotFoundError('Private keyfile does not exist.')
-
     try:
-        with open(recipient_key) as f:
-            recipient_key = read_public_key(f.read())
+        recipient_key = read_public_key(recipient_key.read())
     except Exception:
         raise FinCryptDecodingError('Recipient keyfile was malformed.')
 
     try:
-        with open(PRIVATE_KEY) as f:
-            signer_key = read_private_key(f.read())
+        signer_key = read_private_key(signer_key.read())
     except Exception:
         raise FinCryptDecodingError('Private key file is malformed.')
 
-    encrypted_key, encrypted_iv, encrypted_blocks = encrypt_message(recipient_key['kx'], recipient_key['ky'],
-                                                                    message)
+    try:
+        encrypted_key, encrypted_iv, encrypted_blocks = encrypt_message(recipient_key['kx'], recipient_key['ky'],
+                                                                        message)
+    except:
+        raise FinCryptDecodingError('Unknown error encountered when encrypting message.')
+
     signature = sign_message(signer_key['k'], message)
 
     encrypted_message = FinCryptMessage()
@@ -383,7 +377,7 @@ def encrypt_and_sign(message, recipient):
     return encoded_message
 
 
-def decrypt_and_verify(message, sender):
+def decrypt_and_verify(message, private_key, sender_key):
     """
     Decrypts and verifies a message using a sender's public key name
     Looks for the sender's public key in the public_keys/ directory.
@@ -399,23 +393,13 @@ def decrypt_and_verify(message, sender):
     If message was unable to be decrypted, the tuple will be (None, False)
     """
 
-    sender_key = os.path.join(PUBLIC_PATH, sender)
-
-    if not os.path.exists(sender_key):
-        raise FileNotFoundError('Sender keyfile does not exist.')
-
-    if not os.path.exists(PRIVATE_KEY):
-        raise FileNotFoundError('Private keyfile does not exist.')
-
     try:
-        with open(PRIVATE_KEY) as f:
-            decryption_key = read_private_key(f.read())
+        decryption_key = read_private_key(private_key.read())
     except Exception:
-        raise FinCryptDecodingError('Private key file is malformed or does not exist.')
+        raise FinCryptDecodingError('Private key file is malformed.')
 
     try:
-        with open(sender_key) as f:
-            sender_key = read_public_key(f.read())
+        sender_key = read_public_key(sender_key.read())
     except Exception:
         raise FinCryptDecodingError('Sender key file is malformed.')
 
@@ -450,7 +434,16 @@ def encrypt_text(arguments):
     :param arguments: Argparser arguments object.
     :return: None
     """
-    message = encrypt_and_sign(zlib.compress(arguments.infile.read(), level=9), arguments.recipient)
+    recipient_keyfile = os.path.join(PUBLIC_PATH, arguments.recipient)
+
+    if not os.path.exists(recipient_keyfile):
+        raise FileNotFoundError('Recipient keyfile does not exist.')
+
+    if not os.path.exists(PRIVATE_KEY):
+        raise FileNotFoundError('Private keyfile does not exist.')
+
+    with open(recipient_keyfile) as recipient_key, open(PRIVATE_KEY) as private_key:
+        message = encrypt_and_sign(zlib.compress(arguments.infile.read(), level=9), recipient_key, private_key)
 
     message = base64.b64encode(message).decode('utf-8')
 
@@ -469,6 +462,14 @@ def decrypt_text(arguments):
     :return: None
     """
 
+    sender_keyfile = os.path.join(PUBLIC_PATH, arguments.sender)
+
+    if not os.path.exists(sender_keyfile):
+        raise FileNotFoundError('Sender keyfile does not exist.')
+
+    if not os.path.exists(PRIVATE_KEY):
+        raise FileNotFoundError('Private keyfile does not exist.')
+
     try:
         in_message = read_message(arguments.infile.read())
 
@@ -476,10 +477,10 @@ def decrypt_text(arguments):
 
         in_message = base64.b64decode(in_message)
 
-        message, verified = decrypt_and_verify(in_message, arguments.sender)
-    except Exception as e:
-        sys.stderr.write('%s\n' % e)
-        sys.exit()
+        with open(PRIVATE_KEY) as private_key, open(sender_keyfile) as sender_key:
+            message, verified = decrypt_and_verify(in_message, private_key, sender_key)
+    except:
+        raise FinCryptDecodingError('Message was malformed.')
 
     if message is None:
         sys.stderr.write('Decryption failed.\n')
@@ -504,7 +505,6 @@ def encrypt_binary(arguments):
     """
 
     message = encrypt_and_sign(zlib.compress(arguments.infile.read(), level=9), arguments.recipient)
-
 
     sys.stdout.buffer.write(message)
 

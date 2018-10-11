@@ -770,7 +770,7 @@ class ECDSA:
 
         return x1 == r
 
-
+# This is the E-521 curve from http://safecurves.cr.yp.to
 CURVE = TwistedEdwardsCurve(a=1,
                             d=-376014,
                             p=0x1ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff,
