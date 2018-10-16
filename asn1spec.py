@@ -1,5 +1,6 @@
 from pyasn1.type import univ, char, namedtype
 
+
 class FinCryptPublicKey(univ.Sequence):
     pass
 
@@ -10,6 +11,7 @@ FinCryptPublicKey.componentType = namedtype.NamedTypes(
     namedtype.NamedType('name', char.UTF8String()),
     namedtype.NamedType('email', char.UTF8String())
 )
+
 
 class FinCryptPrivateKey(univ.Sequence):
     pass
@@ -32,7 +34,6 @@ class FinCryptMessage(univ.Sequence):
 
 FinCryptMessage.componentType = namedtype.NamedTypes(
     namedtype.NamedType('key', IntSequence()),
-    namedtype.NamedType('iv', IntSequence()),
     namedtype.NamedType('message', univ.OctetString()),
     namedtype.NamedType('signature', IntSequence())
 )

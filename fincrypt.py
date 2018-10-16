@@ -20,7 +20,10 @@ BASE_PATH = os.path.dirname(__file__)
 PUBLIC_PATH = os.path.join(BASE_PATH, 'public_keys')
 PRIVATE_KEY = os.path.join(BASE_PATH, 'private_key', 'private.asc')
 
-_flatten = lambda l: [item for sublist in l for item in sublist]
+
+def _flatten(l):
+    return [item for sublist in l for item in sublist]
+
 
 class FinCryptDecodingError(Exception):
     def __init__(self, *args, **kwargs):
@@ -38,12 +41,17 @@ def get_blocks(message, block_size=256):
     """
 
     block_nums = []
+
     for block in [message[i:i + block_size] for i in range(0, len(message), block_size)]:
+
         block_num = 0
         block = block[::-1]
+
         for i, char in enumerate(block):
             block_num += char * (256 ** i)
+
         block_nums.append(block_num)
+
     return block_nums
 
 
@@ -59,48 +67,18 @@ def get_bytes(block_nums):
     message = []
     for block in block_nums:
         block_text = []
+
         while block:
             message_num = block % 256
             block = block // 256
+
             block_text.append(bytes([message_num]))
+
         block_text.reverse()
+
         message.extend(block_text)
+
     return b''.join(message)
-
-
-def encrypt_number(kx, ky, num):
-    """
-    Encrypts a number using the ECC curve.
-
-    :param kx: The x value of the public key's point (int)
-    :param ky: The y value of the public key's point (int)
-    :param num: The number to encrypt (int)
-    :return: Tuple (c1 (int), c2 (ecc.Point))
-    """
-
-    el_gamal = ecc.ElGamal(ecc.CURVE)
-
-    encrypted = el_gamal.encrypt(num, ecc.ECPublicKey(ecc.AffineCurvePoint(kx, ky, ecc.CURVE)))
-
-    return encrypted[0].x, encrypted[0].y, encrypted[1].x, encrypted[1].y
-
-
-def decrypt_number(k, c1_x, c1_y, c2_x, c2_y):
-    """
-    Decrypts a number using the ECC curve.
-
-    :param k: The private key (int)
-    :param c1_x: The x value of c1 (int)
-    :param c1_y: The y value of c1 (int)
-    :param c2_x: The x value of c2 (int)
-    :param c2_y: The y value of c2 (int)
-    :return: Original number (int)
-    """
-
-    el_gamal = ecc.ElGamal(ecc.CURVE)
-
-    return el_gamal.decrypt(ecc.AffineCurvePoint(c1_x, c1_y, ecc.CURVE), ecc.AffineCurvePoint(c2_x, c2_y, ecc.CURVE),
-                            ecc.ECPrivateKey(k, ecc.CURVE))
 
 
 def sign_number(k, num):
@@ -153,34 +131,26 @@ def encrypt_message(kx, ky, message):
     and encrypted message (bytes))
     """
 
-    encrypted_key = []
-    encrypted_iv = []
+    ecies = ecc.ECEIS(ecc.CURVE)
 
-    key = os.urandom(32)
-    iv = os.urandom(16)
+    r, s = ecies.exchange(ecc.ECPublicKey(ecc.AffineCurvePoint(kx, ky, ecc.CURVE)))
 
-    block_size = 256
+    s = str(s).encode('utf-8')
 
-    message_encryptor = Encrypter(mode=AESModeOfOperationCBC(key=key, iv=iv))
+    key = sha.SHA3_512(s).digest()
+
+    message_encryptor = Encrypter(mode=AESModeOfOperationCBC(key[:32], iv=key[32:48]))
 
     encrypted_blocks = message_encryptor.feed(message)
 
     encrypted_blocks += message_encryptor.feed()
 
-    for block in get_blocks(key, block_size):
-        encrypted_key.append(encrypt_number(kx, ky, block))
+    encrypted_key = r.x, r.y
 
-    for block in get_blocks(iv, block_size):
-        encrypted_iv.append(encrypt_number(kx, ky, block))
-
-    encrypted_key = _flatten(encrypted_key)
-
-    encrypted_iv = _flatten(encrypted_iv)
-
-    return encrypted_key, encrypted_iv, encrypted_blocks
+    return encrypted_key, encrypted_blocks
 
 
-def decrypt_message(k, encrypted_key, encrypted_iv, encrypted_message):
+def decrypt_message(k, encrypted_key, encrypted_message):
     """
     Decrypts a message encrypted by the encrypt_message function
     First decrypts the AES key and IV using ECC
@@ -188,27 +158,21 @@ def decrypt_message(k, encrypted_key, encrypted_iv, encrypted_message):
 
     :param k: Private key k
     :param encrypted_key: ECC encrypted key (list of of ints)
-    :param encrypted_iv: ECC encrypted IV (list of ints)
     :param encrypted_message: AES encrypted data (bytes
     :return: Decrypted data (bytes)
     """
 
-    decrypted_key = []
-    decrypted_iv = []
+    ecies = ecc.ECEIS(ecc.CURVE)
 
-    encrypted_key = [encrypted_key[i:i + 4] for i in range(0, len(encrypted_key), 4)]
+    r = ecc.AffineCurvePoint(encrypted_key[0], encrypted_key[1], ecc.CURVE)
 
-    encrypted_iv = [encrypted_iv[i:i + 4] for i in range(0, len(encrypted_iv), 4)]
+    s = ecies.recover(r, ecc.ECPrivateKey(k, ecc.CURVE))
 
-    for block in encrypted_key:
-        decrypted_key.append(decrypt_number(k, *block))
-    decrypted_key = get_bytes(decrypted_key)
+    s = str(s).encode('utf-8')
 
-    for block in encrypted_iv:
-        decrypted_iv.append(decrypt_number(k, *block))
-    decrypted_iv = get_bytes(decrypted_iv)
+    key = sha.SHA3_512(s).digest()
 
-    message_decryptor = Decrypter(mode=AESModeOfOperationCBC(decrypted_key, iv=decrypted_iv))
+    message_decryptor = Decrypter(mode=AESModeOfOperationCBC(key[:32], iv=key[32:48]))
 
     decrypted_message = message_decryptor.feed(encrypted_message)
     decrypted_message += message_decryptor.feed()
@@ -227,7 +191,7 @@ def sign_message(k, message):
     :return: Signature (list of ints)
     """
 
-    message_hash = sha.SHA512(message).digest()
+    message_hash = sha.SHA3_512(message).digest()
 
     block = get_blocks(message_hash, 1024)
 
@@ -248,7 +212,7 @@ def authenticate_message(kx, ky, plaintext, signature):
     :return: Whether the message signature is valid (boolean)
     """
 
-    message_hash = sha.SHA512(plaintext).digest()
+    message_hash = sha.SHA3_512(plaintext).digest()
 
     block = get_blocks(message_hash, 1024)
 
@@ -359,8 +323,8 @@ def encrypt_and_sign(message, recipient_key, signer_key):
         raise FinCryptDecodingError('Private key file is malformed.')
 
     try:
-        encrypted_key, encrypted_iv, encrypted_blocks = encrypt_message(recipient_key['kx'], recipient_key['ky'],
-                                                                        message)
+        encrypted_key, encrypted_blocks = encrypt_message(recipient_key['kx'], recipient_key['ky'],
+                                                          message)
     except Exception:
         raise FinCryptDecodingError('Unknown error encountered when encrypting message.')
 
@@ -370,7 +334,6 @@ def encrypt_and_sign(message, recipient_key, signer_key):
 
     encrypted_message['message'] = encrypted_blocks
     encrypted_message['key'].extend(encrypted_key)
-    encrypted_message['iv'].extend(encrypted_iv)
     encrypted_message['signature'].extend(signature)
 
     encoded_message = encode_der(encrypted_message)
@@ -378,7 +341,7 @@ def encrypt_and_sign(message, recipient_key, signer_key):
     return encoded_message
 
 
-def decrypt_and_verify(message, private_key, sender_key):
+def decrypt_and_verify(message, sender_key, private_key):
     """
     Decrypts and verifies a message using a sender's public key name
     Looks for the sender's public key in the public_keys/ directory.
@@ -412,9 +375,7 @@ def decrypt_and_verify(message, private_key, sender_key):
         return None, False
 
     try:
-        decrypted_message = decrypt_message(decryption_key['k'],
-                                            decoded['key'], decoded['iv'],
-                                            decoded['message'])
+        decrypted_message = decrypt_message(decryption_key['k'], decoded['key'], decoded['message'])
     except Exception:
         decrypted_message = None
 
@@ -480,7 +441,7 @@ def decrypt_text(arguments):
         in_message = base64.b64decode(in_message)
 
         with open(PRIVATE_KEY) as private_key, open(sender_keyfile) as sender_key:
-            message, verified = decrypt_and_verify(in_message, private_key, sender_key)
+            message, verified = decrypt_and_verify(in_message, sender_key, private_key)
     except Exception:
         raise FinCryptDecodingError('Message was malformed.')
 
@@ -541,7 +502,7 @@ def decrypt_binary(arguments):
 
     try:
         with open(PRIVATE_KEY) as private_key, open(sender_keyfile) as sender_key:
-            message, verified = decrypt_and_verify(in_message, private_key, sender_key)
+            message, verified = decrypt_and_verify(in_message, sender_key, private_key)
     except Exception:
         raise FinCryptDecodingError('Message was malformed.')
 
@@ -578,7 +539,7 @@ def enum_keys(arguments):
 
         key = read_public_key(key_text)
 
-        key_hash = sha.SHA512(key_text.encode('utf-8')).hexdigest()
+        key_hash = sha.SHA3_512(key_text.encode('utf-8')).hexdigest()
         key_hash_formatted = ':'.join([key_hash[i:i + 2] for i in range(0, len(key_hash), 2)]).upper()
 
         # Only use the first 64 characters of the hash so it fills up less of the board.

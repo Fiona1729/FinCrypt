@@ -1,107 +1,407 @@
-import copy
-import struct
+from math import log
+from operator import xor
+from copy import deepcopy
+from functools import reduce
+
+# The Keccak-f round constants.
+RoundConstants = [
+    0x0000000000000001, 0x0000000000008082, 0x800000000000808A, 0x8000000080008000,
+    0x000000000000808B, 0x0000000080000001, 0x8000000080008081, 0x8000000000008009,
+    0x000000000000008A, 0x0000000000000088, 0x0000000080008009, 0x000000008000000A,
+    0x000000008000808B, 0x800000000000008B, 0x8000000000008089, 0x8000000000008003,
+    0x8000000000008002, 0x8000000000000080, 0x000000000000800A, 0x800000008000000A,
+    0x8000000080008081, 0x8000000000008080, 0x0000000080000001, 0x8000000080008008
+]
+
+RotationConstants = [
+    [0,  1,  62, 28, 27],
+    [36, 44, 6,  55, 20],
+    [3,  10, 43, 25, 39],
+    [41, 45, 15, 21, 8],
+    [18, 2,  61, 56, 14]
+]
+
+Masks = [(1 << i) - 1 for i in range(65)]
 
 
-def new(m=None):
-    return SHA512(m)
+def bits2bytes(x):
+    return (int(x) + 7) // 8
 
 
-class SHA512(object):
-    _k = (0x428a2f98d728ae22, 0x7137449123ef65cd, 0xb5c0fbcfec4d3b2f, 0xe9b5dba58189dbbc,
-          0x3956c25bf348b538, 0x59f111f1b605d019, 0x923f82a4af194f9b, 0xab1c5ed5da6d8118,
-          0xd807aa98a3030242, 0x12835b0145706fbe, 0x243185be4ee4b28c, 0x550c7dc3d5ffb4e2,
-          0x72be5d74f27b896f, 0x80deb1fe3b1696b1, 0x9bdc06a725c71235, 0xc19bf174cf692694,
-          0xe49b69c19ef14ad2, 0xefbe4786384f25e3, 0x0fc19dc68b8cd5b5, 0x240ca1cc77ac9c65,
-          0x2de92c6f592b0275, 0x4a7484aa6ea6e483, 0x5cb0a9dcbd41fbd4, 0x76f988da831153b5,
-          0x983e5152ee66dfab, 0xa831c66d2db43210, 0xb00327c898fb213f, 0xbf597fc7beef0ee4,
-          0xc6e00bf33da88fc2, 0xd5a79147930aa725, 0x06ca6351e003826f, 0x142929670a0e6e70,
-          0x27b70a8546d22ffc, 0x2e1b21385c26c926, 0x4d2c6dfc5ac42aed, 0x53380d139d95b3df,
-          0x650a73548baf63de, 0x766a0abb3c77b2a8, 0x81c2c92e47edaee6, 0x92722c851482353b,
-          0xa2bfe8a14cf10364, 0xa81a664bbc423001, 0xc24b8b70d0f89791, 0xc76c51a30654be30,
-          0xd192e819d6ef5218, 0xd69906245565a910, 0xf40e35855771202a, 0x106aa07032bbd1b8,
-          0x19a4c116b8d2d0c8, 0x1e376c085141ab53, 0x2748774cdf8eeb99, 0x34b0bcb5e19b48a8,
-          0x391c0cb3c5c95a63, 0x4ed8aa4ae3418acb, 0x5b9cca4f7763e373, 0x682e6ff3d6b2b8a3,
-          0x748f82ee5defb2fc, 0x78a5636f43172f60, 0x84c87814a1f0ab72, 0x8cc702081a6439ec,
-          0x90befffa23631e28, 0xa4506cebde82bde9, 0xbef9a3f7b2c67915, 0xc67178f2e372532b,
-          0xca273eceea26619c, 0xd186b8c721c0c207, 0xeada7dd6cde0eb1e, 0xf57d4f7fee6ed178,
-          0x06f067aa72176fba, 0x0a637dc5a2c898a6, 0x113f9804bef90dae, 0x1b710b35131c471b,
-          0x28db77f523047d84, 0x32caab7b40c72493, 0x3c9ebe0a15c9bebc, 0x431d67c49c100d4c,
-          0x4cc5d4becb3e42b6, 0x597f299cfc657e2a, 0x5fcb6fab3ad6faec, 0x6c44198c4a475817)
-    _h = (0x6a09e667f3bcc908, 0xbb67ae8584caa73b, 0x3c6ef372fe94f82b, 0xa54ff53a5f1d36f1,
-          0x510e527fade682d1, 0x9b05688c2b3e6c1f, 0x1f83d9abfb41bd6b, 0x5be0cd19137e2179)
-    _output_size = 8
+def rol(value, left, bits):
+    """
+    Circularly rotate 'value' to the left,
+    treating it as a quantity of the given size in bits.
+    """
+    top = value >> (bits - left)
+    bot = (value & Masks[bits - left]) << left
+    return bot | top
 
-    blocksize = 1
-    block_size = 128
-    digest_size = 64
 
-    def __init__(self, m=None):
-        self._buffer = b''
-        self._counter = 0
+def ror(value, right, bits):
+    """
+    Circularly rotate 'value' to the right,
+    treating it as a quantity of the given size in bits.
+    """
+    top = value >> right
+    bot = (value & Masks[right]) << (bits - right)
+    return bot | top
 
-        if m is not None:
-            self.update(m)
+
+def multirate_padding(used_bytes, align_bytes):
+    """
+    The Keccak padding function.
+    """
+    padlen = align_bytes - used_bytes
+    if padlen == 0:
+        padlen = align_bytes
+    # note: padding done in 'internal bit ordering', wherein LSB is leftmost
+    if padlen == 1:
+        return [0x81]
+    else:
+        return [0x01] + ([0x00] * (padlen - 2)) + [0x80]
+
+
+def sha_padding(used_bytes, align_bytes):
+    """
+    The SHA3 padding function
+    """
+    padlen = align_bytes - (used_bytes % align_bytes)
+    if padlen == 1:
+        return [0x86]
+    elif padlen == 2:
+        return [0x06, 0x80]
+    else:
+        return [0x06] + ([0x00] * (padlen - 2)) + [0x80]
+
+
+def keccak_f(state):
+    """
+    This is Keccak-f permutation.  It operates on and
+    mutates the passed-in KeccakState.  It returns nothing.
+    """
+
+    def keccak_round(a, rc):
+        w, h = state.W, state.H
+        rangew, rangeh = state.rangeW, state.rangeH
+        lanew = state.lanew
+        zero = state.zero
+
+        # theta
+        c = [reduce(xor, a[x]) for x in rangew]
+        d = [0] * w
+        for x in rangew:
+            d[x] = c[(x - 1) % w] ^ rol(c[(x + 1) % w], 1, lanew)
+            for y in rangeh:
+                a[x][y] ^= d[x]
+
+        # rho and pi
+        b = zero()
+        for x in rangew:
+            for y in rangeh:
+                b[y % w][(2 * x + 3 * y) % h] = rol(a[x][y], RotationConstants[y][x], lanew)
+
+        # chi
+        for x in rangew:
+            for y in rangeh:
+                a[x][y] = b[x][y] ^ ((~ b[(x + 1) % w][y]) & b[(x + 2) % w][y])
+
+        # iota
+        a[0][0] ^= rc
+
+    nr = 12 + 2 * int(log(state.lanew, 2))
+
+    for ir in range(nr):
+        keccak_round(state.s, RoundConstants[ir])
+
+
+class KeccakState:
+    """
+    A keccak state container.
+
+    The state is stored as a 5x5 table of integers.
+    """
+    W = 5
+    H = 5
+
+    rangeW = range(W)
+    rangeH = range(H)
 
     @staticmethod
-    def _rotr(x, y):
-        return ((x >> y) | (x << (64 - y))) & 0xFFFFFFFFFFFFFFFF
+    def zero():
+        """
+        Returns an zero state table.
+        """
+        return [[0] * KeccakState.W for _ in KeccakState.rangeH]
 
-    def _sha512_process(self, chunk):
-        w = [0] * 80
-        w[0:15] = struct.unpack('!16Q', chunk)
+    @staticmethod
+    def format(st):
+        """
+        Formats the given state as hex, in natural byte order.
+        """
+        rows = []
 
-        for i in range(16, 80):
-            s0 = self._rotr(w[i - 15], 1) ^ self._rotr(w[i - 15], 8) ^ (w[i - 15] >> 7)
-            s1 = self._rotr(w[i - 2], 19) ^ self._rotr(w[i - 2], 61) ^ (w[i - 2] >> 6)
-            w[i] = (w[i - 16] + s0 + w[i - 7] + s1) & 0xFFFFFFFFFFFFFFFF
+        def fmt(stx):
+            return '%016x' % stx
 
-        a, b, c, d, e, f, g, h = self._h
+        for y in KeccakState.rangeH:
+            row = []
+            for x in KeccakState.rangeW:
+                row.append(fmt(st[x][y]))
+            rows.append(' '.join(row))
+        return '\n'.join(rows)
 
-        for i in range(80):
-            s0 = self._rotr(a, 28) ^ self._rotr(a, 34) ^ self._rotr(a, 39)
-            maj = (a & b) ^ (a & c) ^ (b & c)
-            t2 = s0 + maj
-            s1 = self._rotr(e, 14) ^ self._rotr(e, 18) ^ self._rotr(e, 41)
-            ch = (e & f) ^ ((~e) & g)
-            t1 = h + s1 + ch + self._k[i] + w[i]
+    @staticmethod
+    def lane2bytes(s, w):
+        """
+        Converts the lane s to a sequence of byte values,
+        assuming a lane is w bits.
+        """
+        o = []
+        for b in range(0, w, 8):
+            o.append((s >> b) & 0xff)
+        return o
 
-            h = g
-            g = f
-            f = e
-            e = (d + t1) & 0xFFFFFFFFFFFFFFFF
-            d = c
-            c = b
-            b = a
-            a = (t1 + t2) & 0xFFFFFFFFFFFFFFFF
+    @staticmethod
+    def bytes2lane(bb):
+        """
+        Converts a sequence of byte values to a lane.
+        """
+        r = 0
+        for b in reversed(bb):
+            r = r << 8 | b
+        return r
 
-        self._h = [(x + y) & 0xFFFFFFFFFFFFFFFF for x, y in zip(self._h, [a, b, c, d, e, f, g, h])]
+    @staticmethod
+    def bytes2str(bb):
+        """
+        Converts a sequence of byte values to a string.
+        """
+        return bytes(bb)
 
-    def update(self, m):
-        if not m:
-            return
+    @staticmethod
+    def str2bytes(ss):
+        """
+        Converts a string to a sequence of byte values.
+        """
+        return map(ord, ss)
 
-        self._buffer += m
-        self._counter += len(m)
+    def __init__(self, bitrate, b):
+        self.bitrate = bitrate
+        self.b = b
 
-        while len(self._buffer) >= 128:
-            self._sha512_process(self._buffer[:128])
-            self._buffer = self._buffer[128:]
+        # only byte-aligned
+        assert self.bitrate % 8 == 0
+        self.bitrate_bytes = bits2bytes(self.bitrate)
+
+        assert self.b % 25 == 0
+        self.lanew = self.b // 25
+
+        self.s = KeccakState.zero()
+
+    def __str__(self):
+        return KeccakState.format(self.s)
+
+    def absorb(self, bb):
+        """
+        Mixes in the given bitrate-length string to the state.
+        """
+        assert len(bb) == self.bitrate_bytes
+
+        bb += [0] * bits2bytes(self.b - self.bitrate)
+        i = 0
+
+        for y in self.rangeH:
+            for x in self.rangeW:
+                self.s[x][y] ^= KeccakState.bytes2lane(bb[i:i + 8])
+                i += 8
+
+    def squeeze(self):
+        """
+        Returns the bitrate-length prefix of the state to be output.
+        """
+        return self.get_bytes()[:self.bitrate_bytes]
+
+    def get_bytes(self):
+        """
+        Convert whole state to a byte string.
+        """
+        out = [0] * bits2bytes(self.b)
+        i = 0
+        for y in self.rangeH:
+            for x in self.rangeW:
+                v = KeccakState.lane2bytes(self.s[x][y], self.lanew)
+                out[i:i + 8] = v
+                i += 8
+        return out
+
+    def set_bytes(self, bb):
+        """
+        Set whole state from byte string, which is assumed
+        to be the correct length.
+        """
+        i = 0
+        for y in self.rangeH:
+            for x in self.rangeW:
+                self.s[x][y] = KeccakState.bytes2lane(bb[i:i + 8])
+                i += 8
+
+
+class KeccakSponge:
+    def __init__(self, bitrate, width, padfn, permfn):
+        self.state = KeccakState(bitrate, width)
+        self.padfn = padfn
+        self.permfn = permfn
+        self.buffer = []
+
+    def copy(self):
+        return deepcopy(self)
+
+    def absorb_block(self, bb):
+        assert len(bb) == self.state.bitrate_bytes
+        self.state.absorb(bb)
+        self.permfn(self.state)
+
+    def absorb(self, s):
+        self.buffer += s
+
+        while len(self.buffer) >= self.state.bitrate_bytes:
+            self.absorb_block(self.buffer[:self.state.bitrate_bytes])
+            self.buffer = self.buffer[self.state.bitrate_bytes:]
+
+    def absorb_final(self):
+        padded = self.buffer + self.padfn(len(self.buffer), self.state.bitrate_bytes)
+        self.absorb_block(padded)
+        self.buffer = []
+
+    def squeeze_once(self):
+        rc = self.state.squeeze()
+        self.permfn(self.state)
+        return rc
+
+    def squeeze(self, l):
+        z = self.squeeze_once()
+        while len(z) < l:
+            z += self.squeeze_once()
+        return z[:l]
+
+
+class KeccakHash:
+    """
+    The Keccak hash function, with a hashlib-compatible interface.
+    """
+
+    def __init__(self, bitrate_bits, capacity_bits, output_bits):
+        # our in-absorption sponge. this is never given padding
+        assert bitrate_bits + capacity_bits in (25, 50, 100, 200, 400, 800, 1600)
+        self.sponge = KeccakSponge(bitrate_bits, bitrate_bits + capacity_bits,
+                                   multirate_padding,
+                                   keccak_f)
+
+        # hashlib interface members
+        assert output_bits % 8 == 0
+        self.digest_size = bits2bytes(output_bits)
+        self.block_size = bits2bytes(bitrate_bits)
+
+    def __repr__(self):
+        inf = (self.sponge.state.bitrate,
+               self.sponge.state.b - self.sponge.state.bitrate,
+               self.digest_size * 8)
+        return '<KeccakHash with r=%d, c=%d, image=%d>' % inf
+
+    def copy(self):
+        return deepcopy(self)
+
+    def update(self, s):
+        self.sponge.absorb(s)
 
     def digest(self):
-        mdi = self._counter & 0x7F
-        length = struct.pack('!Q', self._counter << 3)
-
-        if mdi < 112:
-            padlen = 111 - mdi
-        else:
-            padlen = 239 - mdi
-
-        r = self.copy()
-        r.update(b'\x80' + (b'\x00' * (padlen + 8)) + length)
-        return b''.join([struct.pack('!Q', i) for i in r._h[:self._output_size]])
+        finalised = self.sponge.copy()
+        finalised.absorb_final()
+        digest = finalised.squeeze(self.digest_size)
+        return KeccakState.bytes2str(digest)
 
     def hexdigest(self):
         return self.digest().hex()
 
+    @staticmethod
+    def preset(bitrate_bits, capacity_bits, output_bits):
+        """
+        Returns a factory function for the given bitrate, sponge capacity and output length.
+        The function accepts an optional initial input, ala hashlib.
+        """
+
+        def create(initial_input=None):
+            h = KeccakHash(bitrate_bits, capacity_bits, output_bits)
+            if initial_input is not None:
+                h.update(initial_input)
+            return h
+
+        return create
+
+
+class SHA3Hash:
+    """
+    The Keccak hash function, with a hashlib-compatible interface.
+    """
+
+    def __init__(self, bitrate_bits, capacity_bits, output_bits):
+        # our in-absorption sponge. this is never given padding
+        assert bitrate_bits + capacity_bits in (25, 50, 100, 200, 400, 800, 1600)
+        self.sponge = KeccakSponge(bitrate_bits, bitrate_bits + capacity_bits,
+                                   sha_padding,
+                                   keccak_f)
+
+        # hashlib interface members
+        assert output_bits % 8 == 0
+        self.digest_size = bits2bytes(output_bits)
+        self.block_size = bits2bytes(bitrate_bits)
+
+    def __repr__(self):
+        inf = (self.sponge.state.bitrate,
+               self.sponge.state.b - self.sponge.state.bitrate,
+               self.digest_size * 8)
+        return '<SHA3Hash with r=%d, c=%d, image=%d>' % inf
+
     def copy(self):
-        return copy.deepcopy(self)
+        return deepcopy(self)
+
+    def update(self, s):
+        self.sponge.absorb(s)
+
+    def digest(self):
+        finalised = self.sponge.copy()
+        finalised.absorb_final()
+        digest = finalised.squeeze(self.digest_size)
+        return KeccakState.bytes2str(digest)
+
+    def hexdigest(self):
+        return self.digest().hex()
+
+    @staticmethod
+    def preset(bitrate_bits, capacity_bits, output_bits):
+        """
+        Returns a factory function for the given bitrate, sponge capacity and output length.
+        The function accepts an optional initial input, ala hashlib.
+        """
+
+        def create(initial_input=None):
+            h = SHA3Hash(bitrate_bits, capacity_bits, output_bits)
+            if initial_input is not None:
+                h.update(initial_input)
+            return h
+
+        return create
+
+
+# Keccak parameter presets
+Keccak224 = KeccakHash.preset(1152, 448, 224)
+Keccak256 = KeccakHash.preset(1088, 512, 256)
+Keccak384 = KeccakHash.preset(832, 768, 384)
+Keccak512 = KeccakHash.preset(576, 1024, 512)
+
+# SHA3 parameter presets
+SHA3_224 = SHA3Hash.preset(1152, 448, 224)
+SHA3_256 = SHA3Hash.preset(1086, 512, 256)
+SHA3_384 = SHA3Hash.preset(832, 768, 384)
+SHA3_512 = SHA3Hash.preset(576, 1024, 512)

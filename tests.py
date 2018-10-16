@@ -1,5 +1,6 @@
 import fincrypt
 import io
+import os
 from random import SystemRandom
 
 random = SystemRandom()
@@ -19,7 +20,24 @@ bQ==
 
 
 def test_encrypt(message: bytes):
-    try:
-        message = fincrypt.encrypt_and_sign(message, PUBLIC_KEY, PRIVATE_KEY)
+    encrypted = fincrypt.encrypt_and_sign(message, PUBLIC_KEY, PRIVATE_KEY)
+    PUBLIC_KEY.seek(0)
+    PRIVATE_KEY.seek(0)
+    return encrypted
+
+
+def test_decrypt(message: bytes):
+    decrypted, verified = fincrypt.decrypt_and_verify(message, PUBLIC_KEY, PRIVATE_KEY)
+    PUBLIC_KEY.seek(0)
+    PRIVATE_KEY.seek(0)
+    return decrypted, verified
+
 
 if __name__ == '__main__':
+    for i in range(64):
+        print(i)
+        plaintext = os.urandom(random.randint(1, 2000))
+        encrypted = test_encrypt(plaintext)
+        decrypted = test_decrypt(encrypted)
+        assert plaintext == decrypted[0] and decrypted[1]
+    print('Done')
