@@ -540,10 +540,13 @@ def enum_keys(arguments):
         key = read_public_key(key_text)
 
         key_hash = sha.SHA3_512(key_text.encode('utf-8')).hexdigest()
-        key_hash_formatted = ':'.join([key_hash[i:i + 2] for i in range(0, len(key_hash), 2)]).upper()
+
+        key_hash_formatted = ':'.join([key_hash[:64][i:i + 2] for i in range(0, len(key_hash[:64]), 2)]).upper()
 
         # Only use the first 64 characters of the hash so it fills up less of the board.
-        key_randomart = randomart.randomart(key_hash[:64], 'SHA512')
+        key_randomart = randomart.RandomArt(hashalg='FinCrypt', room_size=(31, 15))
+
+        key_randomart = key_randomart(key_hash)
 
         formatted_key = f"{key_file}:\nName: {key['name'].decode('utf-8')}\nEmail: {key['email'].decode('utf-8')}" \
                         f"\nHash: {key_hash_formatted}\nKeyArt:\n{key_randomart}"
