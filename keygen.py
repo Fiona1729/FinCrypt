@@ -4,6 +4,8 @@ import sys
 import os
 import base64
 import ecc
+import qrcode
+import rserrorcorrection
 from pyasn1.codec.der.encoder import encode
 from asn1spec import FinCryptPublicKey, FinCryptPrivateKey
 
@@ -19,22 +21,16 @@ def num_length(num):
     return len(str(num))
 
 
-def gen_key_files(pub_name, priv_name, *, key_name, key_email):
+def gen_key_files(*, key_name, key_email):
     """
-    Generates key files. Public keys contain an encryption key for messages and
+    Generates keys. Public keys contain an encryption key for messages and
     a decryption key for signatures. Private keys contain a decryption key for messages
     and an encryption key for signatures.
 
-    :param pub_name: Public key filename
-    :param priv_name: Private key filename
     :param key_name: User's name
     :param key_email: User's email
-    :return: None
+    :return: Public key string, private key string
     """
-
-    if os.path.exists(pub_name) or os.path.exists(priv_name):
-        print('Key files already exist!')
-        sys.exit()
 
     private = ecc.ECPrivateKey.generate(ecc.CURVE)
 
@@ -55,18 +51,22 @@ def gen_key_files(pub_name, priv_name, *, key_name, key_email):
     pub_key_bytes = encode(pub_key)
     priv_key_bytes = encode(priv_key)
 
-    public = base64.b64encode(pub_key_bytes).decode('utf-8')
-    private = base64.b64encode(priv_key_bytes).decode('utf-8')
+    rsc = rserrorcorrection.RSCodec(30)
 
-    with open(pub_name, 'w') as f:
-        f.write(' BEGIN FINCRYPT PUBLIC KEY '.center(76, '-') + '\n')
-        f.write('\n'.join([public[i:i + 76] for i in range(0, len(public), 76)]))
-        f.write('\n' + ' END FINCRYPT PUBLIC KEY '.center(76, '-'))
+    pub_key_bytes = bytes(rsc.encode(pub_key_bytes))
 
-    with open(priv_name, 'w') as f:
-        f.write(' BEGIN FINCRYPT PRIVATE KEY '.center(76, '-') + '\n')
-        f.write('\n'.join([private[i:i + 76] for i in range(0, len(private), 76)]))
-        f.write('\n' + ' END FINCRYPT PRIVATE KEY '.center(76, '-'))
+    public = base64.urlsafe_b64encode(pub_key_bytes).decode('utf-8')
+    private = base64.urlsafe_b64encode(priv_key_bytes).decode('utf-8')
+
+    public_string = ' BEGIN FINCRYPT PUBLIC KEY '.center(76, '-') + '\n'
+    public_string += '\n'.join([public[i:i + 76] for i in range(0, len(public), 76)])
+    public_string += '\n' + ' END FINCRYPT PUBLIC KEY '.center(76, '-')
+
+    private_string = ' BEGIN FINCRYPT PRIVATE KEY '.center(76, '-') + '\n'
+    private_string += '\n'.join([private[i:i + 76] for i in range(0, len(private), 76)])
+    private_string += '\n' + ' END FINCRYPT PRIVATE KEY '.center(76, '-')
+
+    return public_string, private_string
 
 
 if __name__ == '__main__':
@@ -82,4 +82,30 @@ if __name__ == '__main__':
     priv_file = input('Please enter the desired filename of the private key.\n'
                       'Rename this key private.asc and put it into your private_key directory.\n>>>')
 
-    gen_key_files(pub_file, priv_file, key_name=name[:50], key_email=email[:80])
+    print('Your key will also be saved in a QR code. You can have your friends scan this QR code'
+          '\nand save it as a public key file to give them your key.')
+
+    if os.path.exists(pub_file) or os.path.exists(priv_file):
+        print('Key files already exist!')
+        sys.exit()
+
+    public_string, private_string = gen_key_files(key_name=name[:50], key_email=email[:80])
+
+    with open(pub_file, 'w') as f:
+        f.write(public_string)
+
+    with open(priv_file, 'w') as f:
+        f.write(private_string)
+
+    qr = qrcode.QRCode(version=None,
+                       error_correction=qrcode.constants.ERROR_CORRECT_H,
+                       box_size=15,
+                       border=10)
+
+    qr.add_data(public_string)
+    qr.make(fit=True)
+
+    img = qr.make_image(fill_color='black', back_color='white')
+    qr_filename = pub_file.rsplit('.', 1)[0] + '.png'
+
+    img.save(qr_filename)

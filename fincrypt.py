@@ -9,6 +9,7 @@ import zlib
 import randomart
 import re
 import ecc
+import rserrorcorrection
 from asn1spec import FinCryptPublicKey, FinCryptPrivateKey, FinCryptMessage
 from pyasn1.codec.ber.decoder import decode as decode_ber
 from pyasn1.codec.native.encoder import encode as encode_native
@@ -228,8 +229,8 @@ def strip_headers(pem_text):
     """
 
     match = re.match(
-        r'(?:-+ (BEGIN FINCRYPT (?:PUBLIC |PRIVATE )?(?:KEY|MESSAGE)) -+\n)([a-zA-Z0-9\n+/=]+)'
-        r'(?:-+ END FINCRYPT (?:PUBLIC |PRIVATE )?(?:KEY|MESSAGE) -+)', pem_text)
+        r'(?:-+ (BEGIN FINCRYPT (?:PUBLIC |PRIVATE )?(?:KEY|MESSAGE)) -+\n)([a-zA-Z0-9\n\-_=]+[^\n])'
+        r'(?:\n-+ END FINCRYPT (?:PUBLIC |PRIVATE )?(?:KEY|MESSAGE) -+)', pem_text)
     if match is None:
         return None, None
     return match[1], match[2]
@@ -267,6 +268,11 @@ def read_public_key(key_text):
         raise ValueError
 
     b64_decoded = base64.urlsafe_b64decode(key_text.encode('utf-8'))
+
+    rsc = rserrorcorrection.RSCodec(30)
+
+    b64_decoded = bytes(rsc.decode(b64_decoded)[0])
+
     key, _ = decode_ber(b64_decoded, asn1Spec=FinCryptPublicKey())
     key = encode_native(key)
 
@@ -338,6 +344,10 @@ def encrypt_and_sign(message, recipient_key, signer_key):
 
     encoded_message = encode_der(encrypted_message)
 
+    rsc = rserrorcorrection.RSCodec(30)
+
+    encoded_message = bytes(rsc.encode(encoded_message))
+
     return encoded_message
 
 
@@ -369,6 +379,9 @@ def decrypt_and_verify(message, sender_key, private_key):
         raise FinCryptDecodingError('Sender key file is malformed.')
 
     try:
+        rsc = rserrorcorrection.RSCodec(30)
+
+        message = bytes(rsc.decode(message)[0])
         decoded, _ = decode_ber(message, asn1Spec=FinCryptMessage())
         decoded = encode_native(decoded)
     except Exception:
