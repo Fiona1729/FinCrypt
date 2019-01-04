@@ -33,9 +33,8 @@ AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
 LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
-
-
 """
+
 import sys
 import io
 from random import randint
@@ -443,6 +442,7 @@ if __name__ == '__main__':
     average_blocks = sum(times_to_finish) / len(times_to_finish)
     max_blocks = max(times_to_finish)
     min_blocks = min(times_to_finish)
+
     print('Summary:\n--------------------------------')
 
     print('Total blocks: %s' % len(data))
