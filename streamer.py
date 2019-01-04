@@ -6,6 +6,7 @@ import time
 import os
 import re
 import io
+import base64
 
 def main():
     parser = argparse.ArgumentParser(description='Split a file into multiple streamed QR codes using a'
@@ -32,7 +33,7 @@ def main():
         qr = qrcode.QRCode(version=None,
                            box_size=15,
                            border=10)
-        qr.add_data(block)
+        qr.add_data(base64.b64encode(block))
         qr.make(fit=True)
 
         img = qr.make_image(fill_color='black', back_color='white')
