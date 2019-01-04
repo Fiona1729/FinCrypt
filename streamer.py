@@ -48,7 +48,7 @@ def main():
 
     images = [j.convert('RGBA') for j in images]
 
-    images[0].save(os.path.join(current_path, timestamp, re.sub(r'\W+', '', args.infile.name) + '.gif'), format='GIF', save_all=True, append_images=images[1:], duration=500, loop=0)
+    images[0].save(os.path.join(current_path, timestamp, re.sub(r'\W+', '', args.infile.name) + '.gif'), format='GIF', save_all=True, append_images=images[1:], duration=300, loop=0)
 
 if __name__ == '__main__':
     main()
