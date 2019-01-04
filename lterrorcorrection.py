@@ -42,6 +42,7 @@ from random import randint
 from struct import pack, unpack
 from math import log, floor, sqrt, ceil
 from collections import defaultdict
+from random import choice
 
 DEFAULT_C = 0.1
 DEFAULT_DELTA = 0.5
@@ -298,7 +299,7 @@ class LTDecoder(object):
         self.done = self._handle_block(src_blocks, block)
         return self.done
 
-    def decode_block_from_bytes(self, block_bytes):
+    def decode_bytes(self, block_bytes):
         header = unpack('!III', block_bytes[:12])
         data = int.from_bytes(block_bytes[12:], 'big')
         return self.consume_block((header, data))
@@ -368,31 +369,90 @@ def stream_decode(in_stream, out_stream=None, **kwargs):
         return decoder.bytes_dump()
 
 
+def optimal_encoding(f, block_size, **kwargs):
+    # Generate 32 different encodings and test to see how well they do in decoding
+    # Then return the one that took the least number of blocks on average to decode
+    # Also make sure that small enough files get enough blocks to successfully decode
+
+    input_data = f.read()
+
+    if len(input_data) // block_size < 15:
+        multiplier = 8
+    else:
+        multiplier = 2.5
+
+    data_encodings = []
+    data_encoding_scores = []
+
+    for i in range(32):
+        enc = encoder(io.BytesIO(input_data), block_size, **kwargs)
+
+        encoded_test_data = [enc.__next__() for _ in range(floor(len(input_data) // block_size * multiplier))]
+
+        times_to_finish = []
+        for i in range(64):
+            dec = LTDecoder()
+
+            num_blocks_fed = 0
+
+            possible_blocks = [x for x in range(len(encoded_test_data))]
+
+            while True:
+                block_pos = choice(possible_blocks)
+                possible_blocks.remove(block_pos)
+                dec.decode_bytes(encoded_test_data[block_pos])
+                if dec.is_done():
+                    break
+                num_blocks_fed += 1
+            times_to_finish.append(num_blocks_fed)
+            assert dec.bytes_dump() == input_data
+        data_encodings.append(encoded_test_data)
+        data_encoding_scores.append(sum(times_to_finish) / len(times_to_finish))
+
+    optimal_encoding = data_encoding_scores.index(min(data_encoding_scores))
+
+    return data_encodings[optimal_encoding], data_encoding_scores[optimal_encoding]
+
+
 if __name__ == '__main__':
     block_size = 512
     input_data = bytes([randint(0, 255) for _ in range(65535)])
 
-    enc = encoder(io.BytesIO(input_data), block_size)
+    data, score = optimal_encoding(io.BytesIO(input_data), block_size)
 
-    data = [enc.__next__() for _ in range(65535 * 3 // block_size)]
+    print('Optimized data encoding!')
 
-    print('Number of blocks: %s' % len(data))
+    times_to_finish = []
 
-    dec = LTDecoder()
+    for i in range(512):
+        dec = LTDecoder()
 
-    num_blocks_fed = 0
+        num_blocks_fed = 0
 
-    while True:
-        block_pos = randint(0, len(data) - 1)
-        try:
-            dec.decode_block_from_bytes(data[block_pos])
-        except Exception as e:
-            print(block_pos)
-            raise e
-        if dec.is_done():
-            break
-        num_blocks_fed += 1
+        possible_blocks = [x for x in range(len(data))]
 
-    assert dec.bytes_dump() == input_data
-    print('Decoding done in %s randomly chosen blocks' % num_blocks_fed)
+        while True:
+            block_pos = choice(possible_blocks)
+            possible_blocks.remove(block_pos)
+            dec.decode_bytes(data[block_pos])
+            if dec.is_done():
+                break
+            num_blocks_fed += 1
+        times_to_finish.append(num_blocks_fed)
+        assert dec.bytes_dump() == input_data
+
+    optimal_blocks = ceil(len(input_data) / block_size)
+    average_blocks = sum(times_to_finish) / len(times_to_finish)
+    max_blocks = max(times_to_finish)
+    min_blocks = min(times_to_finish)
+    print('Summary:\n--------------------------------')
+
+    print('Total blocks: %s' % len(data))
+    print('Optimization function score: %s' % score)
+    print('Max blocks: %s' % max_blocks)
+    print('Avg. blocks: %s' % average_blocks)
+    print('Min blocks: %s' % min_blocks)
+    print('Optimal blocks: %s' % optimal_blocks)
+    print('LT coding overhead: %0.2f%%' % ((average_blocks / optimal_blocks - 1) * 100))
+    print('Done testing!')
 
