@@ -344,7 +344,7 @@ def encrypt_and_sign(message, recipient_key, signer_key):
 
     encoded_message = encode_der(encrypted_message)
 
-    rsc = rserrorcorrection.RSCodec(30)
+    rsc = rserrorcorrection.RSCodec(8)
 
     encoded_message = bytes(rsc.encode(encoded_message))
 
@@ -379,7 +379,7 @@ def decrypt_and_verify(message, sender_key, private_key):
         raise FinCryptDecodingError('Sender key file is malformed.')
 
     try:
-        rsc = rserrorcorrection.RSCodec(30)
+        rsc = rserrorcorrection.RSCodec(8)
 
         message = bytes(rsc.decode(message)[0])
         decoded, _ = decode_ber(message, asn1Spec=FinCryptMessage())

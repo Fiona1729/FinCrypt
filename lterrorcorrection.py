@@ -369,7 +369,7 @@ def stream_decode(in_stream, out_stream=None, **kwargs):
         return decoder.bytes_dump()
 
 
-def optimal_encoding(f, block_size, **kwargs):
+def optimal_encoding(f, block_size, extra=0, **kwargs):
     # Generate 32 different encodings and test to see how well they do in decoding
     # Then return the one that took the least number of blocks on average to decode
     # Also make sure that small enough files get enough blocks to successfully decode
@@ -377,9 +377,7 @@ def optimal_encoding(f, block_size, **kwargs):
     input_data = f.read()
 
     if len(input_data) // block_size < 15:
-        multiplier = 8
-    else:
-        multiplier = 2.5
+        extra += 15
 
     data_encodings = []
     data_encoding_scores = []
@@ -387,7 +385,7 @@ def optimal_encoding(f, block_size, **kwargs):
     for i in range(32):
         enc = encoder(io.BytesIO(input_data), block_size, **kwargs)
 
-        encoded_test_data = [enc.__next__() for _ in range(floor(len(input_data) // block_size * multiplier))]
+        encoded_test_data = [enc.__next__() for _ in range(floor(len(input_data) // block_size * 2.5) + extra)]
 
         times_to_finish = []
         for i in range(64):

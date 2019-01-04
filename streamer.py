@@ -4,6 +4,8 @@ import sys
 import qrcode
 import time
 import os
+import re
+import io
 
 def main():
     parser = argparse.ArgumentParser(description='Split a file into multiple streamed QR codes using a'
@@ -15,7 +17,9 @@ def main():
 
     args = parser.parse_args()
 
-    data, score = lterrorcorrection.optimal_encoding(args.infile, args.block_size)
+    input_data = args.infile.read()
+
+    data, score = lterrorcorrection.optimal_encoding(io.BytesIO(input_data), args.block_size)
 
     current_path = os.getcwd()
 
@@ -34,9 +38,8 @@ def main():
         img = qr.make_image(fill_color='black', back_color='white')
         img.save(os.path.join(current_path, timestamp, '%s_%s.png' % (i, timestamp)))
 
-    with open(os.path.join(current_path, timestamp, args.infile.name), 'wb') as f:
-        args.infile.seek(0)
-        f.write(args.infile.read())
+    with open(os.path.join(current_path, timestamp, re.sub(r'\W+', '', args.infile.name)), 'wb') as f:
+        f.write(input_data)
     args.infile.close()
 
 if __name__ == '__main__':
