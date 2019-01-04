@@ -19,7 +19,7 @@ def main():
 
     input_data = args.infile.read()
 
-    data, score = lterrorcorrection.optimal_encoding(io.BytesIO(input_data), args.block_size)
+    data, score = lterrorcorrection.optimal_encoding(io.BytesIO(input_data), args.block_size, extra=5)
 
     current_path = os.getcwd()
 
