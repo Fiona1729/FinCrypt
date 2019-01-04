@@ -28,6 +28,8 @@ def main():
 
     os.mkdir(os.path.join(current_path, timestamp))
 
+    images = []
+
     for i, block in enumerate(data):
         print('Generating QR code #%s' % i)
         qr = qrcode.QRCode(version=None,
@@ -37,11 +39,16 @@ def main():
         qr.make(fit=True)
 
         img = qr.make_image(fill_color='black', back_color='white')
+        images.append(img)
         img.save(os.path.join(current_path, timestamp, '%s_%s.png' % (i, timestamp)))
 
     with open(os.path.join(current_path, timestamp, re.sub(r'\W+', '', args.infile.name)), 'wb') as f:
         f.write(input_data)
     args.infile.close()
+
+    images = [j.convert('RGBA') for j in images]
+
+    images[0].save(os.path.join(current_path, timestamp, re.sub(r'\W+', '', args.infile.name) + '.gif'), format='GIF', save_all=True, append_images=images[1:], duration=500, loop=0)
 
 if __name__ == '__main__':
     main()
