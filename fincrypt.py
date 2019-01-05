@@ -421,7 +421,7 @@ def encrypt_text(arguments):
     with open(recipient_keyfile) as recipient_key, open(PRIVATE_KEY) as private_key:
         message = encrypt_and_sign(zlib.compress(arguments.infile.read(), level=9), recipient_key, private_key)
 
-    message = base64.b64encode(message).decode('utf-8')
+    message = base64.urlsafe_b64encode(message).decode('utf-8')
 
     sys.stdout.write(' BEGIN FINCRYPT MESSAGE '.center(76, '-') + '\n')
     sys.stdout.write('\n'.join([message[i:i + 76] for i in range(0, len(message), 76)]))
@@ -451,7 +451,7 @@ def decrypt_text(arguments):
 
         in_message = ''.join(in_message.split('\n'))
 
-        in_message = base64.b64decode(in_message)
+        in_message = base64.urlsafe_b64decode(in_message)
 
         with open(PRIVATE_KEY) as private_key, open(sender_keyfile) as sender_key:
             message, verified = decrypt_and_verify(in_message, sender_key, private_key)
