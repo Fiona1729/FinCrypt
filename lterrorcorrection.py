@@ -376,7 +376,7 @@ def optimal_encoding(f, block_size, extra=0, **kwargs):
     input_data = f.read()
 
     if len(input_data) // block_size < 15:
-        extra += 15
+        extra += 6
 
     data_encodings = []
     data_encoding_scores = []

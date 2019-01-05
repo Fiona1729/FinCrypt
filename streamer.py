@@ -10,8 +10,8 @@ import base64
 from math import ceil
 
 def main():
-    parser = argparse.ArgumentParser(description='Split a file into multiple streamed QR codes using a'
-                                                 ' fountain coding scheme')
+    parser = argparse.ArgumentParser(description='Split a file into multiple streamed QR codes using  '
+                                                 'fountain coding scheme')
 
     parser.add_argument('-b', '--block-size', type=int, default=512)
     parser.add_argument('-d', '--duration', type=int, default=300,
