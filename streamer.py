@@ -7,7 +7,7 @@ import os
 import re
 import io
 import base64
-from math import ceil
+from math import ceil, floor
 
 def main():
     parser = argparse.ArgumentParser(description='Split a file into multiple streamed QR codes using  '
@@ -16,6 +16,8 @@ def main():
     parser.add_argument('-b', '--block-size', type=int, default=512)
     parser.add_argument('-d', '--duration', type=int, default=300,
                         help='The duration of each individual frame in the QR gif')
+    parser.add_argument('-e', '--extra', type=int, default=8,
+                        help='The number of extra QR codes to generate')
     parser.add_argument('infile', nargs='?', type=argparse.FileType('rb'),
                         default=sys.stdin.buffer, help='The filename or path of file to stream.')
 
@@ -23,7 +25,15 @@ def main():
 
     input_data = args.infile.read()
 
-    data, score = lterrorcorrection.optimal_encoding(io.BytesIO(input_data), args.block_size, extra=5)
+    running_extra = int(args.extra)
+
+    while True:
+        try:
+            data, score = lterrorcorrection.optimal_encoding(io.BytesIO(input_data), args.block_size, extra=floor(running_extra))
+            break
+        except:
+            running_extra += 0.25
+
 
     current_path = os.getcwd()
 
@@ -36,7 +46,7 @@ def main():
     for i, block in enumerate(data):
         print('Generating QR code #%s' % (i + 1))
         qr = qrcode.QRCode(version=None,
-                           box_size=15,
+                           box_size=8,
                            border=10)
         qr.add_data(base64.b64encode(block))
         qr.make(fit=True)

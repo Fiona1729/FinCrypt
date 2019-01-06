@@ -384,7 +384,7 @@ def optimal_encoding(f, block_size, extra=0, **kwargs):
     for i in range(32):
         enc = encoder(io.BytesIO(input_data), block_size, **kwargs)
 
-        encoded_test_data = [enc.__next__() for _ in range(floor(len(input_data) // block_size * 2.5) + extra)]
+        encoded_test_data = [enc.__next__() for _ in range(ceil(len(input_data) // block_size) + extra)]
 
         times_to_finish = []
         for i in range(64):
