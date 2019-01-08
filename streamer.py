@@ -64,7 +64,7 @@ def main():
     images[0].save(os.path.join(current_path, timestamp, re.sub(r'\W+', '', args.infile.name) + '.gif'), format='GIF', save_all=True, append_images=images[1:], duration=args.duration, loop=0)
     print('\nResults:\n-------------------------------')
     print('Generated %s images.' % len(images))
-    print('Reccomended minimum number of images to print/display/use: %0.0f' % ceil(score * 1.2))
+    print('Recommended minimum number of images to print/display/use: %0.0f' % ceil(score + 5))
 
 
 if __name__ == '__main__':
