@@ -66,5 +66,6 @@ def main():
     print('Generated %s images.' % len(images))
     print('Reccomended minimum number of images to print/display/use: %0.0f' % ceil(score * 1.2))
 
+
 if __name__ == '__main__':
     main()
