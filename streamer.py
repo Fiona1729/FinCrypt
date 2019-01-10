@@ -10,6 +10,7 @@ import base64
 from math import ceil, floor
 from qrcode.constants import *
 
+
 def main():
     parser = argparse.ArgumentParser(description='Split a file into multiple streamed QR codes using  '
                                                  'fountain coding scheme')

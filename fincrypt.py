@@ -9,7 +9,8 @@ import zlib
 import randomart
 import re
 import ecc
-import rserrorcorrection
+import reedsolomon
+import oeap
 from asn1spec import FinCryptPublicKey, FinCryptPrivateKey, FinCryptMessage
 from pyasn1.codec.ber.decoder import decode as decode_ber
 from pyasn1.codec.native.encoder import encode as encode_native
@@ -142,7 +143,7 @@ def encrypt_message(kx, ky, message):
 
     message_encryptor = Encrypter(mode=AESModeOfOperationCBC(key[:32], iv=key[32:48]))
 
-    encrypted_blocks = message_encryptor.feed(message)
+    encrypted_blocks = message_encryptor.feed(oeap.oeap_pad(message))
 
     encrypted_blocks += message_encryptor.feed()
 
@@ -178,7 +179,7 @@ def decrypt_message(k, encrypted_key, encrypted_message):
     decrypted_message = message_decryptor.feed(encrypted_message)
     decrypted_message += message_decryptor.feed()
 
-    return decrypted_message
+    return oeap.oeap_unpad(decrypted_message)
 
 
 def sign_message(k, message):
@@ -268,7 +269,7 @@ def read_public_key(key_text):
 
     b64_decoded = base64.urlsafe_b64decode(key_text.encode('utf-8'))
 
-    rsc = rserrorcorrection.RSCodec(30)
+    rsc = reedsolomon.RSCodec(30)
 
     b64_decoded = bytes(rsc.decode(b64_decoded)[0])
 
@@ -343,7 +344,7 @@ def encrypt_and_sign(message, recipient_key, signer_key):
 
     encoded_message = encode_der(encrypted_message)
 
-    rsc = rserrorcorrection.RSCodec(8)
+    rsc = reedsolomon.RSCodec(8)
 
     encoded_message = bytes(rsc.encode(encoded_message))
 
@@ -378,7 +379,7 @@ def decrypt_and_verify(message, sender_key, private_key):
         raise FinCryptDecodingError('Sender key file is malformed.')
 
     try:
-        rsc = rserrorcorrection.RSCodec(8)
+        rsc = reedsolomon.RSCodec(8)
 
         message = bytes(rsc.decode(message)[0])
         decoded, _ = decode_ber(message, asn1Spec=FinCryptMessage())

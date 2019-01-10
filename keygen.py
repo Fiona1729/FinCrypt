@@ -5,7 +5,7 @@ import os
 import base64
 import ecc
 import qrcode
-import rserrorcorrection
+import reedsolomon
 from pyasn1.codec.der.encoder import encode
 from asn1spec import FinCryptPublicKey, FinCryptPrivateKey
 
@@ -51,7 +51,7 @@ def gen_key_files(*, key_name, key_email):
     pub_key_bytes = encode(pub_key)
     priv_key_bytes = encode(priv_key)
 
-    rsc = rserrorcorrection.RSCodec(30)
+    rsc = reedsolomon.RSCodec(30)
 
     pub_key_bytes = bytes(rsc.encode(pub_key_bytes))
 
