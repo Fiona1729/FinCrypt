@@ -119,7 +119,7 @@ def encrypt_message(kx, ky, message):
     Encrypts a message using ECC and AES-256
     First generates a random AES key and IV with os.urandom()
     Then encrypts the original message with that key
-    Then encrypts the AES key with the RSA key
+    Then encrypts the AES key with the ECC key
 
     NOTE:
     This means that plaintext will not have the same ciphertext
@@ -183,9 +183,9 @@ def decrypt_message(k, encrypted_key, encrypted_message):
 
 def sign_message(k, message):
     """
-    Signs a message using an RSA signature private key (n and e), a message,
+    Signs a message using an ECDSA signature private key and a message,
 
-    Computes SHA512 hash of plaintext, and then encrypts it with private key
+    Computes SHA512 hash of plaintext and then performs ECDSA signature upon it
 
     :param k: ECC key k
     :param message: Message to sign (bytes)
@@ -203,8 +203,7 @@ def authenticate_message(kx, ky, plaintext, signature):
     """
     Authenticates a message when given a plaintext and signature
 
-    Decrypts hash with public key, and compares alleged hash with actual
-    hash of plaintext.
+    Verifies hash with ECDSA public key
 
     :param kx: ECC Public key kx
     :param ky: ECC Public key ky
@@ -452,11 +451,16 @@ def decrypt_text(arguments):
         in_message = ''.join(in_message.split('\n'))
 
         in_message = base64.urlsafe_b64decode(in_message)
+    except Exception:
+        sys.stderr.write('Message was malformed.\n')
+        return
 
+    try:
         with open(PRIVATE_KEY) as private_key, open(sender_keyfile) as sender_key:
             message, verified = decrypt_and_verify(in_message, sender_key, private_key)
-    except Exception:
-        raise FinCryptDecodingError('Message was malformed.')
+    except Exception as e:
+        sys.stderr.write(str(e) + '\n')
+        return
 
     if message is None:
         sys.stderr.write('Decryption failed.\n')
@@ -516,8 +520,9 @@ def decrypt_binary(arguments):
     try:
         with open(PRIVATE_KEY) as private_key, open(sender_keyfile) as sender_key:
             message, verified = decrypt_and_verify(in_message, sender_key, private_key)
-    except Exception:
-        raise FinCryptDecodingError('Message was malformed.')
+    except Exception as e:
+        sys.stderr.write(str(e) + '\n')
+        return
 
     if message is None:
         sys.stderr.write('Decryption failed.\n')
