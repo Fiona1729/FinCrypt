@@ -10,7 +10,7 @@ import randomart
 import re
 import ecc
 import reedsolomon
-import oeap
+import oaep
 from asn1spec import FinCryptPublicKey, FinCryptPrivateKey, FinCryptMessage
 from pyasn1.codec.ber.decoder import decode as decode_ber
 from pyasn1.codec.native.encoder import encode as encode_native
@@ -143,7 +143,7 @@ def encrypt_message(kx, ky, message):
 
     message_encryptor = Encrypter(mode=AESModeOfOperationCBC(key[:32], iv=key[32:48]))
 
-    encrypted_blocks = message_encryptor.feed(oeap.oeap_pad(message))
+    encrypted_blocks = message_encryptor.feed(oaep.oaep_pad(message))
 
     encrypted_blocks += message_encryptor.feed()
 
@@ -179,7 +179,7 @@ def decrypt_message(k, encrypted_key, encrypted_message):
     decrypted_message = message_decryptor.feed(encrypted_message)
     decrypted_message += message_decryptor.feed()
 
-    return oeap.oeap_unpad(decrypted_message)
+    return oaep.oaep_unpad(decrypted_message)
 
 
 def sign_message(k, message):
