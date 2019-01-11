@@ -1,4 +1,4 @@
-import lterrorcorrection
+import fountaincoding
 import argparse
 import sys
 import qrcode
@@ -19,7 +19,7 @@ def main():
     parser.add_argument('-d', '--duration', type=int, default=300,
                         help='The duration of each individual frame in the QR gif. '
                              'Default is 300 ms')
-    parser.add_argument('-e', '--extra', type=int, default=8,
+    parser.add_argument('-e', '--extra', type=int, default=10,
                         help='The number of extra QR codes to generate '
                              'Default is 8.')
     parser.add_argument('-r', '--error', type=int, choices=[0, 1, 2, 3], default=1,
@@ -36,10 +36,11 @@ def main():
 
     while True:
         try:
-            data, score = lterrorcorrection.optimal_encoding(io.BytesIO(input_data), args.block_size, extra=floor(running_extra))
+            data, score = fountaincoding.optimal_encoding(io.BytesIO(input_data), args.block_size,
+                                                          extra=floor(running_extra))
             break
-        except Exception:
-            running_extra += 0.25
+        except Exception as e:
+            running_extra += 0.75
 
     current_path = os.getcwd()
 
