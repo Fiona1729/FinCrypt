@@ -1,6 +1,5 @@
 from sha import SHAKE256
 from random import SystemRandom
-from os import urandom
 random = SystemRandom()
 
 
