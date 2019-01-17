@@ -21,7 +21,7 @@ def main():
                              'Default is 300 ms')
     parser.add_argument('-e', '--extra', type=int, default=10,
                         help='The number of extra QR codes to generate '
-                             'Default is 8.')
+                             'Default is 10.')
     parser.add_argument('-r', '--error', type=int, choices=[0, 1, 2, 3], default=1,
                         help='The level of error correction. Default is 1')
     parser.add_argument('infile', nargs='?', type=argparse.FileType('rb'),
@@ -34,13 +34,16 @@ def main():
 
     running_extra = int(args.extra)
 
+    print('Encoding data...')
+
     while True:
         try:
-            data, score = fountaincoding.optimal_encoding(io.BytesIO(input_data), args.block_size,
-                                                          extra=floor(running_extra))
+            data, score, compressed = fountaincoding.optimal_encoding(io.BytesIO(input_data), args.block_size,
+                                                                  extra=floor(running_extra))
             break
-        except Exception as e:
-            running_extra += 0.75
+        except Exception:
+            running_extra += 1
+            print('Increasing extra QR codes so decoding is possible...')
 
     current_path = os.getcwd()
 
@@ -50,8 +53,9 @@ def main():
 
     images = []
 
+    print('Generating QR codes...')
+
     for i, block in enumerate(data):
-        print('Generating QR code #%s' % (i + 1))
         qr = qrcode.QRCode(version=None,
                            error_correction={
                                0: ERROR_CORRECT_L,
@@ -75,9 +79,15 @@ def main():
     images = [j.convert('RGBA') for j in images]
 
     images[0].save(os.path.join(current_path, timestamp, re.sub(r'[^\w.]+', '', args.infile.name) + '.gif'), format='GIF', save_all=True, append_images=images[1:], duration=args.duration, loop=0)
+
+    optimal_blocks = ceil(len(input_data) / args.block_size)
+
     print('\nResults:\n-------------------------------')
     print('Generated %s images.' % len(images))
-    print('Recommended minimum number of images to print/display/use: %0.0f' % ceil(score + 5))
+    print('Compressed data' if compressed else 'Did not compress data')
+    print('Recommended minimum number of images to print/display/use: %0.0f\n(This is for redundancy)' % ceil(score + 5))
+    print('Average number of images taken to decode in testing: %0.2f' % score)
+    print('Overhead from encoding was: %0.2f%%' % ((score / optimal_blocks - 1) * 100))
 
 
 if __name__ == '__main__':

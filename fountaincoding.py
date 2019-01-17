@@ -361,43 +361,35 @@ def optimal_encoding(f, block_size, extra=0, compression=None, **kwargs):
     if len(processed) // block_size < 15:
         extra += 6
 
-    data_encodings = []
-    data_encoding_scores = []
+    enc = encoder(io.BytesIO(processed), block_size, magic_byte, **kwargs)
 
-    for i in range(32):
-        enc = encoder(io.BytesIO(processed), block_size, magic_byte, **kwargs)
+    encoded_test_data = [enc.__next__() for _ in range(ceil(len(processed) / block_size) + extra)]
 
-        encoded_test_data = [enc.__next__() for _ in range(ceil(len(processed) / block_size) + extra)]
+    times_to_finish = []
+    for i in range(64):
+        dec = LTDecoder()
 
-        times_to_finish = []
-        for i in range(64):
-            dec = LTDecoder()
+        num_blocks_fed = 0
 
-            num_blocks_fed = 0
+        possible_blocks = list(range(len(encoded_test_data)))
 
-            possible_blocks = [x for x in range(len(encoded_test_data))]
+        while True:
+            block_pos = choice(possible_blocks)
+            possible_blocks.remove(block_pos)
+            dec.decode_bytes(encoded_test_data[block_pos])
+            if dec.is_done():
+                break
+            num_blocks_fed += 1
+        times_to_finish.append(num_blocks_fed)
 
-            while True:
-                block_pos = randint(0, len(encoded_test_data) - 1)
-                dec.decode_bytes(encoded_test_data[block_pos])
-                if dec.is_done():
-                    break
-                num_blocks_fed += 1
-            times_to_finish.append(num_blocks_fed)
-            assert dec.bytes_dump() == input_data
-        data_encodings.append(encoded_test_data)
-        data_encoding_scores.append(sum(times_to_finish) / len(times_to_finish))
-
-    optimal_encoding = data_encoding_scores.index(min(data_encoding_scores))
-
-    return data_encodings[optimal_encoding], data_encoding_scores[optimal_encoding]
+    return encoded_test_data, sum(times_to_finish) / len(times_to_finish), magic_byte & 0x01 > 0
 
 
 if __name__ == '__main__':
     block_size = 512
     input_data = bytes([randint(0, 255) for _ in range(40000)])
 
-    data, score = optimal_encoding(io.BytesIO(input_data), block_size, len(input_data))
+    data, score, compressed = optimal_encoding(io.BytesIO(input_data), block_size, len(input_data))
 
     print('Optimized data encoding!')
 
@@ -408,12 +400,12 @@ if __name__ == '__main__':
 
         num_blocks_fed = 0
 
-        possible_blocks = [x for x in range(len(data))]
+        possible_blocks = list(range(len(data)))
 
         while True:
             block_pos = choice(possible_blocks)
             possible_blocks.remove(block_pos)
-            _, compressed = dec.decode_bytes(data[block_pos])
+            dec.decode_bytes(data[block_pos])
             if dec.is_done():
                 break
             num_blocks_fed += 1
