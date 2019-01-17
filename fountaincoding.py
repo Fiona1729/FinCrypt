@@ -345,7 +345,7 @@ def optimal_encoding(f, block_size, extra=0, compression=None, **kwargs):
 
     magic_byte = 0x00
 
-    compressed = zlib.compress(input_data)
+    compressed = zlib.compress(input_data, level=9)
 
     if compression is True:
         processed = compressed
