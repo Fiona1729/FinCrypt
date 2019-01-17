@@ -1,10 +1,25 @@
 from sha import SHAKE256
 from random import SystemRandom
-from os import urandom
 random = SystemRandom()
 
 
+def pkcs7_pad(data, padding):
+    pad = padding - (len(data) % padding)
+    return data + bytes([pad] * pad)
+
+
+def pkcs7_unpad(data, padding):
+    if len(data) % padding != 0:
+        raise ValueError('Improper padding!')
+
+    pad = data[-1]
+
+    return data[:-pad]
+
+
 def oaep_pad(message: bytes, append_length=32):
+    message = pkcs7_pad(message, 32)
+
     r = random.getrandbits(append_length)
     length = len(message)
     message = int.from_bytes(message, 'little')
@@ -22,4 +37,4 @@ def oaep_unpad(data: bytes, append_length=32):
     r = (y ^ int.from_bytes(SHAKE256(x.to_bytes(length, 'little')).digest(append_length), 'little')).to_bytes(append_length, 'little')
     message = x ^ int.from_bytes(SHAKE256(r).digest(length), 'little')
 
-    return message.to_bytes(length, 'little')
+    return pkcs7_unpad(message.to_bytes(length, 'little'), 32)
