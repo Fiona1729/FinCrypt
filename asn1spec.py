@@ -47,5 +47,6 @@ FinCryptMnemonicKey.componentType = namedtype.NamedTypes(
     namedtype.NamedType('n', univ.Integer()),
     namedtype.NamedType('k', univ.Integer()),
     namedtype.NamedType('x', univ.Integer()),
-    namedtype.NamedType('y', univ.Integer())
+    namedtype.NamedType('y', univ.Integer()),
+    namedtype.NamedType('uuid', univ.Integer())
 )
