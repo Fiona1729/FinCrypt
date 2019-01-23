@@ -15,13 +15,13 @@ from pyasn1.codec.der.encoder import encode as encode_asn1
 from pyasn1.codec.native.encoder import encode as encode_native
 from pyasn1.codec.ber.decoder import decode as decode_asn1
 
-# 13th Mersenne Prime
+# 15th Mersenne Prime
 # (for this application we want a known prime number as close as
 # possible to our security level; e.g.  desired security level of 128
 # bits -- too large and all the ciphertext is large; too small and
 # security is compromised)
 _PRIME = 2**1279 - 1
-# Make it this big so the secret can be up to 521 bits
+# Make it this big so the secret can be up to 1279 bits
 
 _RINT = functools.partial(random.SystemRandom().randint, 0)
 
