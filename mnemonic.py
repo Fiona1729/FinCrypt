@@ -50,3 +50,12 @@ def mnemonic_decode(wordstring):
                 data[i] |= 1 << (7 - j)
 
     return pkcs7_unpad(bytes(data), 11)
+
+
+if __name__ == '__main__':
+    import os
+    import random
+    for i in range(256):
+        print(i + 1)
+        test_data = os.urandom(random.randint(1, 1024))
+        assert mnemonic_decode(mnemonic_encode(test_data)) == test_data

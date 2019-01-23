@@ -20,7 +20,7 @@ from pyasn1.codec.ber.decoder import decode as decode_asn1
 # possible to our security level; e.g.  desired security level of 128
 # bits -- too large and all the ciphertext is large; too small and
 # security is compromised)
-_PRIME = 2**607 - 1
+_PRIME = 2**1279 - 1
 # Make it this big so the secret can be up to 521 bits
 
 _RINT = functools.partial(random.SystemRandom().randint, 0)
@@ -159,10 +159,15 @@ def recover_secret(share_list):
     shares = [decode_share(share) for share in share_list]
 
     # Checks to see if all items in list are identical
-    same = lambda items: all([x == items[0] for x in items])
+    def same(items):
+        return all([x == items[0] for x in items])
 
     # Make sure all shares UUIDs are identical
     assert same(list(map(lambda x: x['uuid'], shares)))
+
+    assert same(list(map(lambda x: x['n'], shares)))
+
+    assert same(list(map(lambda x: x['k'], shares)))
 
     # Return tuples of x, y values for our _recover_secret function
     shares = list(map(lambda k: (k['x'], k['y']), shares))
@@ -182,7 +187,6 @@ def split_key(args):
     try:
         headerless = strip_headers(input_key)
         key_bytes = urlsafe_b64decode(headerless[1])
-        print(repr(key_bytes))
     except Exception:
         sys.stderr.write('Improperly formatted key!')
         sys.exit()
@@ -214,12 +218,12 @@ def recover_key(args):
         sys.exit()
 
     while num_required > 0:
-        shares.append(input('\nPlease enter the mnemonic phrase for another share.\nThere are %s shares left to enter.\n>>>' % num_required).strip(' \t'))
+        shares.append(input('\nPlease enter the mnemonic phrase for another share.\n'
+                            'There are %s shares left to enter.\n>>>' % num_required).strip(' \t'))
         num_required -= 1
 
     try:
         secret = recover_secret(list([mnemonic_decode(share) for share in shares]))
-        print(repr(secret))
         secret_encoded = urlsafe_b64encode(secret).decode('utf-8')
     except Exception:
         sys.stderr.write('Invalid shares!')
@@ -255,6 +259,6 @@ if __name__ == '__main__':
 
     if args.func is None:
         parser.print_help()
-        #sys.exit()
+        sys.exit()
 
     args.func(args)
