@@ -28,7 +28,7 @@ _RINT = functools.partial(random.SystemRandom().randint, 0)
 
 def _eval_at(poly, x, prime):
     """evaluates polynomial (coefficient tuple) at x, used to generate a
-    shamir pool in make_random_shares below.
+    shamir pool in _make_shares below.
     """
     accum = 0
     for coeff in reversed(poly):
@@ -40,7 +40,7 @@ def _eval_at(poly, x, prime):
 
 def _make_shares(secret, minimum, shares, prime=_PRIME):
     """
-    Generates a random shamir pool, returns the secret and the share
+    Generates a shamir pool, returns the share
     points.
     """
     if minimum > shares:
